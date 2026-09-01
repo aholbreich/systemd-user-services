@@ -19,13 +19,38 @@ Panel {
 
   readonly property var badge: Model.badgeState(services.failedCount)
   readonly property var tabs: Model.groupUnitsByCategory(services.units)
-  property int selectedTabIndex: 0
-  readonly property var currentTab: tabs[Math.min(selectedTabIndex, tabs.length - 1)]
+  property string selectedTabKey: "all"
+  readonly property var currentTab: {
+    var match = tabs.filter(function(t) { return t.key === root.selectedTabKey })
+    return match.length > 0 ? match[0] : tabs[0]
+  }
+  // Two fixed Row groups (task-r3k), not an unbounded Flow: guarantees at
+  // most 2 rows regardless of font metrics, rather than hoping wrapping
+  // lands there. Count moved out of the button label into the
+  // PanelSectionHeader above the row list, matching the shipped network
+  // panel's "DNS PROVIDER" convention -- also what makes 2 rows fit at all.
+  readonly property int tabRowSplit: Math.ceil(tabs.length / 2)
+  readonly property var tabsRow1: tabs.slice(0, tabRowSplit)
+  readonly property var tabsRow2: tabs.slice(tabRowSplit)
 
   function rowColor(unit) {
     if (Model.isFailed(unit)) return Color.urgent
     if (Model.isRunning(unit)) return Color.foreground
     return Color.muted
+  }
+
+  component TabButton: Button {
+    required property var modelData
+
+    text: modelData.label
+    tooltipText: modelData.count + (modelData.count === 1 ? " service" : " services")
+    selected: modelData.key === root.selectedTabKey
+    bordered: true
+    foreground: root.barForeground
+    fontFamily: root.bar ? root.bar.fontFamily : Style.font.family
+    fontSize: Style.font.bodySmall
+    verticalPadding: Style.spacing.controlPaddingY
+    onClicked: root.selectedTabKey = modelData.key
   }
 
   WidgetButton {
@@ -46,7 +71,7 @@ Panel {
     bar: root.bar
     open: root.opened
     focusTarget: keyCatcher
-    contentWidth: panel.fittedContentWidth(Style.space(320))
+    contentWidth: panel.fittedContentWidth(Style.space(420))
     contentHeight: panel.fittedContentHeight(column.implicitHeight, Style.space(400))
 
     PanelKeyCatcher {
@@ -85,31 +110,36 @@ Panel {
           }
 
           // Fixed tab set (task-xdw): same key set every time, even at 0,
-          // so the row doesn't reflow as services start/stop. Flow (not a
-          // fixed-width Row like the DNS-provider pills) because there are
-          // 9 tabs here vs. the shipped examples' 2-4 -- they'd be
-          // illegibly narrow forced into one even-width row.
-          Flow {
+          // so the row doesn't reflow as services start/stop.
+          Column {
             width: parent.width
             spacing: Style.space(6)
 
-            Repeater {
-              model: root.tabs
-
-              Button {
-                required property var modelData
-                required property int index
-
-                text: modelData.label + " (" + modelData.count + ")"
-                selected: index === root.selectedTabIndex
-                bordered: true
-                foreground: root.barForeground
-                fontFamily: root.bar ? root.bar.fontFamily : Style.font.family
-                fontSize: Style.font.bodySmall
-                verticalPadding: Style.spacing.controlPaddingY
-                onClicked: root.selectedTabIndex = index
+            Row {
+              spacing: Style.space(6)
+              Repeater {
+                model: root.tabsRow1
+                delegate: TabButton {}
               }
             }
+
+            Row {
+              spacing: Style.space(6)
+              Repeater {
+                model: root.tabsRow2
+                delegate: TabButton {}
+              }
+            }
+          }
+
+          PanelSeparator {
+            foreground: root.barForeground
+          }
+
+          PanelSectionHeader {
+            text: root.currentTab.label.toUpperCase() + " (" + root.currentTab.count + ")"
+            foreground: root.barForeground
+            fontFamily: root.bar ? root.bar.fontFamily : Style.font.family
           }
 
           Text {

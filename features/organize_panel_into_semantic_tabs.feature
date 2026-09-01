@@ -75,3 +75,16 @@ Feature: Organize the service panel into semantic tabs
     Given the "security" tab has 0 services
     When I click the "security" tab
     Then the panel shows an empty-state message for that category
+
+  # task-r3k follow-up: the original 9-button Flow (each labelled
+  # "Label (count)") wrapped into 4 rows, which looked busy. Redesigned so
+  # tab buttons carry only the label; the count moves to a PanelSectionHeader
+  # above the row list (the same real component the shipped network panel
+  # uses for "DNS PROVIDER"), and tabs lay out in exactly two Row groups
+  # instead of an unbounded Flow, so row count is deterministic.
+  @manual
+  Scenario: Tab buttons fit within two rows, not four
+    Given the panel is open
+    Then the tab buttons occupy at most 2 rows
+    And each tab button shows only its label
+    And the selected tab's count is shown in the section header above the row list
