@@ -1,0 +1,12 @@
+{
+  "name": "systemd-user-services-omarchy-plugin",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Omarchy bar plugin: list and control systemd --user services",
+  "scripts": {
+    "test": "cucumber-js"
+  },
+  "devDependencies": {
+    "@cucumber/cucumber": "^11.0.1"
+  }
+}
