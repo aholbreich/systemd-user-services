@@ -10,6 +10,11 @@ Panel {
   implicitWidth: button.implicitWidth
   implicitHeight: button.implicitHeight
 
+  Service {
+    id: services
+    settings: root.settings
+  }
+
   WidgetButton {
     id: button
     anchors.fill: parent
@@ -37,9 +42,15 @@ Panel {
       onCloseRequested: root.close()
 
       Text {
+        // Placeholder pending task-rhq (row-by-row list) / task-eva (badge);
+        // this story (task-4mm) only needs to prove the service polls and
+        // exposes live state, so surface it minimally rather than not at all.
         id: placeholder
         width: parent.width
-        text: "Service list coming soon"
+        text: services.lastError !== ""
+          ? "Error: " + services.lastError
+          : services.units.length + " user services (" + services.failedCount + " failed)"
+        wrapMode: Text.WordWrap
         color: root.barForeground
         font.family: root.bar ? root.bar.fontFamily : Style.font.family
         font.pixelSize: Style.font.body
