@@ -65,3 +65,5 @@
 {"time":"2026-09-01T20:57:55Z","event":"created","task_id":"task-fn8","actor":"claude-code"}
 {"time":"2026-09-01T20:57:55Z","event":"reference_added","task_id":"task-fn8","actor":"claude-code","value":"Panel.qml"}
 {"time":"2026-09-01T20:59:26Z","event":"claimed","task_id":"task-zj1","actor":"claude-code"}
+{"time":"2026-09-01T21:12:00Z","event":"note_added","task_id":"task-zj1","actor":"claude-code"}
+{"time":"2026-09-01T21:12:00Z","event":"closed","task_id":"task-zj1","actor":"claude-code"}
