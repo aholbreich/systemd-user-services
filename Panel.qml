@@ -2,6 +2,7 @@ import QtQuick
 import Quickshell
 import qs.Commons
 import qs.Ui
+import "Model.js" as Model
 
 Panel {
   id: root
@@ -15,12 +16,14 @@ Panel {
     settings: root.settings
   }
 
+  readonly property var badge: Model.badgeState(services.failedCount)
+
   WidgetButton {
     id: button
     anchors.fill: parent
     bar: root.bar
-    text: "⚙"
-    tooltipText: "User services"
+    text: root.badge.icon + (root.badge.badge !== "" ? " " + root.badge.badge : "")
+    tooltipText: root.badge.tooltip
     onPressed: function(buttonCode) {
       if (buttonCode === Qt.LeftButton) root.toggle()
     }

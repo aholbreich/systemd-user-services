@@ -57,6 +57,18 @@ function countFailed(units) {
   return (units || []).filter(isFailed).length
 }
 
+function badgeState(failedCount) {
+  if (failedCount <= 0) {
+    return { icon: "⚙", badge: "", tooltip: "User services" }
+  }
+  var noun = failedCount === 1 ? "service" : "services"
+  return {
+    icon: "⚠",
+    badge: String(failedCount),
+    tooltip: failedCount + " failed user " + noun
+  }
+}
+
 if (typeof module !== "undefined") {
   module.exports = {
     parseUnits: parseUnits,
@@ -64,6 +76,7 @@ if (typeof module !== "undefined") {
     isFailed: isFailed,
     isRunning: isRunning,
     sortUnits: sortUnits,
-    countFailed: countFailed
+    countFailed: countFailed,
+    badgeState: badgeState
   }
 }
