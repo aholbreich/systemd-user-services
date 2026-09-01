@@ -27,8 +27,12 @@ via a symlink, no `omarchy plugin clone` needed while developing locally.
 ```sh
 ln -s "$(pwd)" ~/.config/omarchy/plugins/io.github.aholbreich.systemd-user-services
 omarchy plugin enable io.github.aholbreich.systemd-user-services
-# the shell daemon auto-reloads on file change; watch for errors:
-qs log -p "$OMARCHY_PATH/shell" --tail 100
+omarchy-restart-shell   # see "hot-reload is unreliable" gotcha below
+qs log -p "$OMARCHY_PATH/shell" --tail 100   # check for errors
+
+# ground truth for "is it actually visible", not just "no errors":
+omarchy-shell shell debugBarGeometry   # look for our id; width/height must be > 0
+grim /tmp/bar-check.png && magick /tmp/bar-check.png -crop 900x60+2940+0 +repage /tmp/bar-right.png
 
 # static checks (must be run with node_modules absent — see gotcha below):
 rm -rf node_modules
@@ -45,6 +49,26 @@ for disallowed symlinks, and npm's `node_modules/.bin/*` are symlinks — so
 validate fails while `node_modules` is present. A real user's `git clone`
 never has `node_modules`, so this only bites local dev; `rm -rf node_modules`
 before validating, `npm install` again before running tests.
+
+**Every bar-widget root must size itself, or it silently renders at 0×0.**
+The bar computes each widget's slot from `activeItem.implicitWidth` /
+`implicitHeight` — if `Panel.qml`'s root doesn't set those (typically
+`implicitWidth: button.implicitWidth` / `implicitHeight: button.implicitHeight`,
+mirroring the shipped `tailscale`/`bluetooth` plugins), the widget mounts
+(`omarchy plugin list` shows `enabled: true`, the log shows no errors) but
+paints nothing and takes zero space. `qs log` and `omarchy plugin validate`
+being clean is **not** proof the widget is visible — check
+`omarchy-shell shell debugBarGeometry` (find your id, confirm width/height
+> 0) or take a real screenshot before calling a UI story done.
+
+**Hot-reload is not reliable for structural changes.** The
+`Local plugin changed, reloading` debug log line does not reliably refire on
+every edit, and neither `omarchy-shell shell rescanPlugins` nor a full
+`omarchy plugin disable`+`enable` cycle is guaranteed to pick up a change —
+in practice only `omarchy-restart-shell` (which kills and relaunches the
+`quickshell` process) reliably forces a fresh compile from disk. Don't trust
+the reload log line as proof of a live update; re-check geometry/screenshot
+after a real restart.
 
 **qmllint warning noise is expected.** Quickshell's `qs.*` import namespace
 (`qs.Commons`, `qs.Ui`, and shell-provided types like `Panel`/`WidgetButton`)

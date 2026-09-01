@@ -7,6 +7,9 @@ Panel {
   id: root
   moduleName: "io.github.aholbreich.systemd-user-services"
 
+  implicitWidth: button.implicitWidth
+  implicitHeight: button.implicitHeight
+
   WidgetButton {
     id: button
     anchors.fill: parent
