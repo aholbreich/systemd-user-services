@@ -12,11 +12,23 @@ Item {
   property int failedCount: 0
   property bool refreshing: false
   property string lastError: ""
+  // Separate from lastError (list-poll failures): an action error must
+  // stay visible for a beat, not get silently wiped by the very next
+  // successful poll -- discovered live, the delayedRefresh 400ms after
+  // every action was clearing it in under half a second.
+  property string lastActionError: ""
 
   readonly property int refreshIntervalSec: intSetting("refreshIntervalSec", 10, 5, 300)
 
+  // Unit currently mid-action, so the row can disable its buttons instead
+  // of racing a second command against the first.
+  property string pendingUnit: ""
+  property string pendingVerb: ""
+
   property string _listOutput: ""
   property string _listError: ""
+  property string _actionOutput: ""
+  property string _actionError: ""
 
   function setting(name, fallback) {
     var value = settings ? settings[name] : undefined
@@ -51,6 +63,21 @@ Item {
     lastError = ""
   }
 
+  function startUnit(name) { runAction("start", name) }
+  function stopUnit(name) { runAction("stop", name) }
+  function restartUnit(name) { runAction("restart", name) }
+
+  function runAction(verb, name) {
+    if (!name || actionProcess.running) return
+    pendingUnit = name
+    pendingVerb = verb
+    lastActionError = ""
+    _actionOutput = ""
+    _actionError = ""
+    actionProcess.command = ["systemctl", "--user", verb, name]
+    actionProcess.running = true
+  }
+
   Timer {
     id: refreshTimer
     interval: root.refreshIntervalSec * 1000
@@ -67,6 +94,44 @@ Item {
     interval: 15000
     repeat: false
     onTriggered: if (listProcess.running) listProcess.running = false
+  }
+
+  Timer {
+    // Give systemd a beat to settle before re-polling, rather than racing
+    // the refresh against the action's own state transition.
+    id: delayedRefresh
+    interval: 400
+    repeat: false
+    onTriggered: root.refresh()
+  }
+
+  Timer {
+    // Mirrors the shipped tailscale plugin's actionStatusTimer convention:
+    // an action error is a transient toast, not a permanent banner, but
+    // it must survive at least the delayedRefresh 400ms after it or no one
+    // would ever see it.
+    id: actionErrorTimer
+    interval: 6000
+    repeat: false
+    onTriggered: root.lastActionError = ""
+  }
+
+  Process {
+    id: actionProcess
+    running: false
+    command: []
+    stdout: StdioCollector { id: actionStdout; waitForEnd: true; onStreamFinished: root._actionOutput = text }
+    stderr: StdioCollector { id: actionStderr; waitForEnd: true; onStreamFinished: root._actionError = text }
+    onExited: function(exitCode) {
+      if (exitCode !== 0) {
+        var detail = actionStderr.text || root._actionError || actionStdout.text || root._actionOutput
+        root.lastActionError = Model.actionErrorMessage(root.pendingVerb, root.pendingUnit, detail)
+        actionErrorTimer.restart()
+      }
+      root.pendingUnit = ""
+      root.pendingVerb = ""
+      delayedRefresh.restart()
+    }
   }
 
   Process {

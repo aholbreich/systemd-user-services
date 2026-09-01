@@ -3,6 +3,32 @@ Feature: Start, stop, and restart a user service from the panel
   I want to control a misbehaving service without opening a terminal
   So that I can recover from a failed service in one click
 
+  # UX: one compact icon toggle button (Start/Stop, whichever applies to the
+  # unit's current state) plus one always-available Restart button per row,
+  # both icon-only with a tooltip (Button's real tooltipText) rather than
+  # full text labels -- keeps 46 rows scannable. Which verb the toggle
+  # represents, and how an action-failure message reads, are pure decisions
+  # worth testing without Quickshell.
+
+  @automated
+  Scenario Outline: The toggle button represents Start or Stop based on current state
+    Given a unit with active state "<state>"
+    Then its toggle action is "<verb>" labelled "<label>"
+
+    Examples:
+      | state    | verb  | label |
+      | active   | stop  | Stop  |
+      | failed   | start | Start |
+      | inactive | start | Start |
+
+  @automated
+  Scenario: An action failure message names the unit and the action
+    Then the action error for "stop" on "backup" with detail "Unit not loaded." is "stop backup failed: Unit not loaded."
+
+  @automated
+  Scenario: An action failure message is still readable with no detail text
+    Then the action error for "start" on "missing" with detail "" is "start missing failed"
+
   @automated
   Scenario: The exact start/stop/restart command shapes work against a real disposable unit
     Given a disposable "systemctl --user" unit created only for this test
@@ -47,3 +73,9 @@ Feature: Start, stop, and restart a user service from the panel
     Given "systemctl --user start missing.service" would fail because the unit does not exist
     When I click "Start" on that row
     Then an error message naming the unit and the action is shown
+    # Bug found live (task-6zg): the delayedRefresh 400ms after every action
+    # unconditionally cleared lastError on its next successful poll, so the
+    # message flashed for well under half a second -- effectively invisible.
+    # Action errors are now tracked separately (lastActionError) from list-
+    # poll errors (lastError) and auto-clear on their own ~6s timer instead.
+    And the error message is still visible several seconds later, not cleared by the very next background refresh

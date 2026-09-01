@@ -1,7 +1,7 @@
 # Systemd User Services (Omarchy plugin)
 
-Monitor `systemctl --user` services from the Omarchy bar, grouped and
-searchable instead of one long flat list.
+List and control `systemctl --user` services from the Omarchy bar, grouped
+into tabs instead of one long flat list.
 
 - Bar icon shows a warning badge with the count of failed user services;
   a quiet gear icon otherwise.
@@ -10,20 +10,19 @@ searchable instead of one long flat list.
 - Services are grouped into semantic tabs (Audio, Security, Portals, Session,
   Filesystem, Omarchy, System, Other) alongside an All tab — see "Category
   taxonomy" below.
-- Start / Stop / Restart each unit inline — **in progress, not shipped yet**
-  (tracked in the task ledger as `task-6zg`); today the plugin is
-  view/monitor-only.
+- Start/Stop (context-sensitive toggle) and Restart per row, via compact
+  icon buttons with tooltips — disabled while an action is in flight,
+  failures surface as an error naming the unit and action.
 
 ![Bar icon](docs/bar-icon.png)
 
-![Panel with category tabs](docs/panel-tabs.png)
+![Panel with category tabs and action buttons](docs/panel-tabs.png)
 
 ## Scope (MVP)
 
 - `systemctl --user` units only — no root/system-wide units, no privilege escalation.
-- Currently **read-only**: list, categorize, and surface failures. Start/stop/
-  restart control is designed for (`Service.qml` already has the polling
-  half) but not yet wired into the panel — see Roadmap.
+- List, categorize, surface failures, and control (start/stop/restart) each
+  unit. One action in flight at a time (not per-row-concurrent).
 - No enable/disable (autostart toggle), no log tailing, no notifications,
   no search/filter yet — see Roadmap.
 - Polling-based refresh (default every 10s, configurable 5–300s), not D-Bus signals.
@@ -166,8 +165,6 @@ for quick unit-parsing checks.
 
 ## Roadmap ideas
 
-- **Start/Stop/Restart from the panel** — next up (`task-6zg`); the polling
-  service already exists, this wires panel buttons to it.
 - Enable/disable toggle (autostart) per unit.
 - Inline `journalctl --user -u <unit> -n 20` tail per row.
 - Notification (`notify-send`) when a unit transitions into `failed`.

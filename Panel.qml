@@ -53,6 +53,18 @@ Panel {
     onClicked: root.selectedTabKey = modelData.key
   }
 
+  // Compact icon-only row action button (task-6zg). Icon-only + tooltip
+  // keeps 46 rows scannable; a full text label per action per row would be
+  // far too wide for two actions on every one of them.
+  component RowActionButton: Button {
+    bordered: true
+    foreground: root.barForeground
+    fontFamily: root.bar ? root.bar.fontFamily : Style.font.family
+    iconSize: Style.font.bodySmall
+    horizontalPadding: Style.space(6)
+    verticalPadding: Style.space(2)
+  }
+
   WidgetButton {
     id: button
     anchors.fill: parent
@@ -109,6 +121,16 @@ Panel {
             font.pixelSize: Style.font.bodySmall
           }
 
+          Text {
+            width: parent.width
+            visible: services.lastActionError !== ""
+            text: "Error: " + services.lastActionError
+            wrapMode: Text.WordWrap
+            color: Color.urgent
+            font.family: root.bar ? root.bar.fontFamily : Style.font.family
+            font.pixelSize: Style.font.bodySmall
+          }
+
           // Fixed tab set (task-xdw): same key set every time, even at 0,
           // so the row doesn't reflow as services start/stop.
           Column {
@@ -155,8 +177,16 @@ Panel {
             model: root.currentTab.units
 
             delegate: Item {
+              id: row
+              required property var modelData
+
+              readonly property var toggle: Model.toggleAction(modelData)
+              readonly property bool busy: services.pendingUnit !== ""
+              readonly property bool thisRowBusy: services.pendingUnit === modelData.name
+
               width: column.width
-              height: Math.max(dot.height, nameText.implicitHeight, stateText.implicitHeight) + Style.space(4)
+              height: Math.max(dot.height, nameText.implicitHeight, stateText.implicitHeight,
+                                toggleBtn.implicitHeight, restartBtn.implicitHeight) + Style.space(4)
 
               Rectangle {
                 id: dot
@@ -165,15 +195,39 @@ Panel {
                 radius: width / 2
                 anchors.left: parent.left
                 anchors.verticalCenter: parent.verticalCenter
-                color: root.rowColor(modelData)
+                color: root.rowColor(row.modelData)
+              }
+
+              RowActionButton {
+                id: restartBtn
+                anchors.right: parent.right
+                anchors.verticalCenter: parent.verticalCenter
+                iconText: "↻"
+                tooltipText: row.thisRowBusy && services.pendingVerb === "restart" ? "Restarting…" : "Restart"
+                enabled: !row.busy
+                onClicked: services.restartUnit(row.modelData.name)
+              }
+
+              RowActionButton {
+                id: toggleBtn
+                anchors.right: restartBtn.left
+                anchors.rightMargin: Style.space(4)
+                anchors.verticalCenter: parent.verticalCenter
+                iconText: row.toggle.verb === "stop" ? "⏹" : "▶"
+                tooltipText: row.thisRowBusy ? row.toggle.label + "ing…" : row.toggle.label
+                enabled: !row.busy
+                onClicked: row.toggle.verb === "stop"
+                  ? services.stopUnit(row.modelData.name)
+                  : services.startUnit(row.modelData.name)
               }
 
               Text {
                 id: stateText
-                anchors.right: parent.right
+                anchors.right: toggleBtn.left
+                anchors.rightMargin: Style.space(6)
                 anchors.verticalCenter: parent.verticalCenter
-                text: Model.stateLabel(modelData)
-                color: root.rowColor(modelData)
+                text: Model.stateLabel(row.modelData)
+                color: root.rowColor(row.modelData)
                 font.family: root.bar ? root.bar.fontFamily : Style.font.family
                 font.pixelSize: Style.font.bodySmall
               }
@@ -186,7 +240,7 @@ Panel {
                 anchors.rightMargin: Style.space(6)
                 anchors.verticalCenter: parent.verticalCenter
                 elide: Text.ElideRight
-                text: modelData.shortName
+                text: row.modelData.shortName
                 color: root.barForeground
                 font.family: root.bar ? root.bar.fontFamily : Style.font.family
                 font.pixelSize: Style.font.body

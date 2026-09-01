@@ -120,6 +120,20 @@ function groupUnitsByCategory(units) {
   })
 }
 
+// Which action the row's toggle button represents right now. Restart is a
+// separate, always-available button (not modeled here) since it's valid
+// from any state.
+function toggleAction(unit) {
+  if (isRunning(unit)) return { verb: "stop", label: "Stop" }
+  return { verb: "start", label: "Start" }
+}
+
+function actionErrorMessage(verb, unitName, detail) {
+  var base = String(verb) + " " + String(unitName) + " failed"
+  var trimmed = String(detail || "").trim()
+  return trimmed ? base + ": " + trimmed : base
+}
+
 function badgeState(failedCount) {
   if (failedCount <= 0) {
     return { icon: "⚙", badge: "", tooltip: "User services" }
@@ -145,6 +159,8 @@ if (typeof module !== "undefined") {
     categorize: categorize,
     categoryLabel: categoryLabel,
     groupUnitsByCategory: groupUnitsByCategory,
-    CATEGORY_KEYS: CATEGORY_KEYS
+    CATEGORY_KEYS: CATEGORY_KEYS,
+    toggleAction: toggleAction,
+    actionErrorMessage: actionErrorMessage
   }
 }
