@@ -1,19 +1,19 @@
 ---
 id: task-zj1
 title: Create attractive GitHub repository with README and usage docs
-status: open
+status: in_progress
 priority: medium
 type: task
 created_at: 2026-09-01T20:42:34Z
-updated_at: 2026-09-01T20:42:34Z
+updated_at: 2026-09-01T20:59:26Z
 created_by: claude-code
 assignee: null
 depends_on: []
 claim:
-  actor: null
-  claimed_at: null
-  expires_at: null
-  heartbeat_at: null
+  actor: claude-code
+  claimed_at: 2026-09-01T20:59:26Z
+  expires_at: 2026-09-01T21:59:26Z
+  heartbeat_at: 2026-09-01T20:59:26Z
 tags:
   - release
   - meta

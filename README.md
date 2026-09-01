@@ -1,20 +1,42 @@
 # Systemd User Services (Omarchy plugin)
 
-List and control `systemctl --user` services from the Omarchy bar.
+Monitor `systemctl --user` services from the Omarchy bar, grouped and
+searchable instead of one long flat list.
 
-- Bar icon shows a warning badge with the count of failed user services.
-- Click it to open a panel listing every user service, sorted failed → running → the rest.
+- Bar icon shows a warning badge with the count of failed user services;
+  a quiet gear icon otherwise.
+- Click it to open a panel listing every user service, sorted failed →
+  running → the rest, with a colored state indicator per row.
 - Services are grouped into semantic tabs (Audio, Security, Portals, Session,
   Filesystem, Omarchy, System, Other) alongside an All tab — see "Category
   taxonomy" below.
-- Start / Stop / Restart each unit inline.
+- Start / Stop / Restart each unit inline — **in progress, not shipped yet**
+  (tracked in the task ledger as `task-6zg`); today the plugin is
+  view/monitor-only.
+
+![Bar icon](docs/bar-icon.png)
+
+![Panel with category tabs](docs/panel-tabs.png)
 
 ## Scope (MVP)
 
 - `systemctl --user` units only — no root/system-wide units, no privilege escalation.
-- Read + control (start/stop/restart). No enable/disable, no log tailing, no
-  notifications, no search/filter yet — see Roadmap.
+- Currently **read-only**: list, categorize, and surface failures. Start/stop/
+  restart control is designed for (`Service.qml` already has the polling
+  half) but not yet wired into the panel — see Roadmap.
+- No enable/disable (autostart toggle), no log tailing, no notifications,
+  no search/filter yet — see Roadmap.
 - Polling-based refresh (default every 10s, configurable 5–300s), not D-Bus signals.
+
+## Configuration
+
+Set via the bar widget's settings (`refreshIntervalSec` in `manifest.json`'s
+`barWidget.schema`, editable through Omarchy's bar-widget settings UI or
+directly in `~/.config/omarchy/shell.json`'s layout entry for this plugin):
+
+| Key | Type | Default | Range | Description |
+|---|---|---|---|---|
+| `refreshIntervalSec` | integer | `10` | 5–300 | How often `Service.qml` re-polls `systemctl --user list-units` |
 
 ## Install
 
@@ -144,6 +166,8 @@ for quick unit-parsing checks.
 
 ## Roadmap ideas
 
+- **Start/Stop/Restart from the panel** — next up (`task-6zg`); the polling
+  service already exists, this wires panel buttons to it.
 - Enable/disable toggle (autostart) per unit.
 - Inline `journalctl --user -u <unit> -n 20` tail per row.
 - Notification (`notify-send`) when a unit transitions into `failed`.
