@@ -134,6 +134,17 @@ function actionErrorMessage(verb, unitName, detail) {
   return trimmed ? base + ": " + trimmed : base
 }
 
+// Hero header's live status line (task-fn8). Separate from badgeState:
+// the bar icon's tooltip is terse ("2 failed user services"), the hero
+// line has room to also say how many are healthy when nothing's wrong.
+function heroStatus(totalCount, failedCount) {
+  if (failedCount > 0) {
+    var noun = failedCount === 1 ? "service" : "services"
+    return { text: failedCount + " " + noun + " failed", urgent: true }
+  }
+  return { text: totalCount + " services, all healthy", urgent: false }
+}
+
 function badgeState(failedCount) {
   if (failedCount <= 0) {
     return { icon: "⚙", badge: "", tooltip: "User services" }
@@ -161,6 +172,7 @@ if (typeof module !== "undefined") {
     groupUnitsByCategory: groupUnitsByCategory,
     CATEGORY_KEYS: CATEGORY_KEYS,
     toggleAction: toggleAction,
-    actionErrorMessage: actionErrorMessage
+    actionErrorMessage: actionErrorMessage,
+    heroStatus: heroStatus
   }
 }

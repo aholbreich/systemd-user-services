@@ -18,6 +18,7 @@ Panel {
   }
 
   readonly property var badge: Model.badgeState(services.failedCount)
+  readonly property var heroStatus: Model.heroStatus(services.units.length, services.failedCount)
   readonly property var tabs: Model.groupUnitsByCategory(services.units)
   property string selectedTabKey: "all"
   readonly property var currentTab: {
@@ -109,10 +110,72 @@ Panel {
         Column {
           id: column
           width: panelFlick.width
-          spacing: Style.space(6)
+          // task-x0j: named semantic tokens instead of ad-hoc Style.space(6)
+          // everywhere -- panelGap between major sections (hero, tabs,
+          // header, list), tighter tokens within each section below.
+          spacing: Style.spacing.panelGap
+
+          // ---------- Hero: icon · title · live status (task-fn8) ----------
+          // Mirrors the real network/bluetooth panels' hero convention: a
+          // big icon, a bold title, and a small-caps status line -- not the
+          // task's own literal "SYSTEMD USER SERVICES" all-caps suggestion,
+          // which doesn't match how the shipped panels actually do it.
+          Item {
+            id: hero
+            width: parent.width
+            implicitHeight: Math.max(heroIcon.implicitHeight, heroLabels.implicitHeight)
+
+            Text {
+              id: heroIcon
+              textFormat: Text.PlainText
+              text: root.badge.icon
+              color: root.heroStatus.urgent ? Color.urgent : root.barForeground
+              font.family: root.bar ? root.bar.fontFamily : Style.font.family
+              font.pixelSize: Style.font.display
+              anchors.left: parent.left
+              anchors.verticalCenter: parent.verticalCenter
+            }
+
+            Column {
+              id: heroLabels
+              anchors.left: heroIcon.right
+              anchors.leftMargin: Style.spacing.xxl
+              anchors.right: parent.right
+              anchors.verticalCenter: parent.verticalCenter
+              spacing: Style.spacing.xxs
+
+              Text {
+                width: parent.width
+                textFormat: Text.PlainText
+                text: "Systemd Services"
+                color: root.barForeground
+                font.family: root.bar ? root.bar.fontFamily : Style.font.family
+                font.pixelSize: Style.font.title
+                font.bold: true
+                elide: Text.ElideRight
+              }
+
+              Text {
+                width: parent.width
+                textFormat: Text.PlainText
+                text: root.heroStatus.text.toUpperCase()
+                color: root.heroStatus.urgent ? Color.urgent : Color.muted
+                font.family: root.bar ? root.bar.fontFamily : Style.font.family
+                font.pixelSize: Style.font.caption
+                font.bold: true
+                font.letterSpacing: 1.2
+                elide: Text.ElideRight
+              }
+            }
+          }
+
+          PanelSeparator {
+            foreground: root.barForeground
+          }
 
           Text {
             width: parent.width
+            height: visible ? implicitHeight : 0
             visible: services.lastError !== ""
             text: "Error: " + services.lastError
             wrapMode: Text.WordWrap
@@ -123,6 +186,7 @@ Panel {
 
           Text {
             width: parent.width
+            height: visible ? implicitHeight : 0
             visible: services.lastActionError !== ""
             text: "Error: " + services.lastActionError
             wrapMode: Text.WordWrap
@@ -135,10 +199,10 @@ Panel {
           // so the row doesn't reflow as services start/stop.
           Column {
             width: parent.width
-            spacing: Style.space(6)
+            spacing: Style.spacing.sm
 
             Row {
-              spacing: Style.space(6)
+              spacing: Style.spacing.md
               Repeater {
                 model: root.tabsRow1
                 delegate: TabButton {}
@@ -146,7 +210,7 @@ Panel {
             }
 
             Row {
-              spacing: Style.space(6)
+              spacing: Style.spacing.md
               Repeater {
                 model: root.tabsRow2
                 delegate: TabButton {}
@@ -166,6 +230,7 @@ Panel {
 
           Text {
             width: parent.width
+            height: visible ? implicitHeight : 0
             visible: services.lastError === "" && root.currentTab.units.length === 0
             text: root.currentTab.key === "all" ? "No user services found" : "No services in " + root.currentTab.label
             color: Color.muted
@@ -173,77 +238,83 @@ Panel {
             font.pixelSize: Style.font.bodySmall
           }
 
-          Repeater {
-            model: root.currentTab.units
+          Column {
+            width: parent.width
+            spacing: Style.spacing.rowGap
 
-            delegate: Item {
-              id: row
-              required property var modelData
+            Repeater {
+              model: root.currentTab.units
 
-              readonly property var toggle: Model.toggleAction(modelData)
-              readonly property bool busy: services.pendingUnit !== ""
-              readonly property bool thisRowBusy: services.pendingUnit === modelData.name
+              delegate: Item {
+                id: row
+                required property var modelData
 
-              width: column.width
-              height: Math.max(dot.height, nameText.implicitHeight, stateText.implicitHeight,
-                                toggleBtn.implicitHeight, restartBtn.implicitHeight) + Style.space(4)
+                readonly property var toggle: Model.toggleAction(modelData)
+                readonly property bool busy: services.pendingUnit !== ""
+                readonly property bool thisRowBusy: services.pendingUnit === modelData.name
 
-              Rectangle {
-                id: dot
-                width: Style.space(6)
-                height: Style.space(6)
-                radius: width / 2
-                anchors.left: parent.left
-                anchors.verticalCenter: parent.verticalCenter
-                color: root.rowColor(row.modelData)
-              }
+                width: parent.width
+                height: Math.max(dot.height, nameText.implicitHeight, stateText.implicitHeight,
+                                  toggleBtn.implicitHeight, restartBtn.implicitHeight,
+                                  Style.spacing.popupRowHeight)
 
-              RowActionButton {
-                id: restartBtn
-                anchors.right: parent.right
-                anchors.verticalCenter: parent.verticalCenter
-                iconText: "↻"
-                tooltipText: row.thisRowBusy && services.pendingVerb === "restart" ? "Restarting…" : "Restart"
-                enabled: !row.busy
-                onClicked: services.restartUnit(row.modelData.name)
-              }
+                Rectangle {
+                  id: dot
+                  width: Style.space(6)
+                  height: Style.space(6)
+                  radius: width / 2
+                  anchors.left: parent.left
+                  anchors.verticalCenter: parent.verticalCenter
+                  color: root.rowColor(row.modelData)
+                }
 
-              RowActionButton {
-                id: toggleBtn
-                anchors.right: restartBtn.left
-                anchors.rightMargin: Style.space(4)
-                anchors.verticalCenter: parent.verticalCenter
-                iconText: row.toggle.verb === "stop" ? "⏹" : "▶"
-                tooltipText: row.thisRowBusy ? row.toggle.label + "ing…" : row.toggle.label
-                enabled: !row.busy
-                onClicked: row.toggle.verb === "stop"
-                  ? services.stopUnit(row.modelData.name)
-                  : services.startUnit(row.modelData.name)
-              }
+                RowActionButton {
+                  id: restartBtn
+                  anchors.right: parent.right
+                  anchors.verticalCenter: parent.verticalCenter
+                  iconText: "↻"
+                  tooltipText: row.thisRowBusy && services.pendingVerb === "restart" ? "Restarting…" : "Restart"
+                  enabled: !row.busy
+                  onClicked: services.restartUnit(row.modelData.name)
+                }
 
-              Text {
-                id: stateText
-                anchors.right: toggleBtn.left
-                anchors.rightMargin: Style.space(6)
-                anchors.verticalCenter: parent.verticalCenter
-                text: Model.stateLabel(row.modelData)
-                color: root.rowColor(row.modelData)
-                font.family: root.bar ? root.bar.fontFamily : Style.font.family
-                font.pixelSize: Style.font.bodySmall
-              }
+                RowActionButton {
+                  id: toggleBtn
+                  anchors.right: restartBtn.left
+                  anchors.rightMargin: Style.space(4)
+                  anchors.verticalCenter: parent.verticalCenter
+                  iconText: row.toggle.verb === "stop" ? "⏹" : "▶"
+                  tooltipText: row.thisRowBusy ? row.toggle.label + "ing…" : row.toggle.label
+                  enabled: !row.busy
+                  onClicked: row.toggle.verb === "stop"
+                    ? services.stopUnit(row.modelData.name)
+                    : services.startUnit(row.modelData.name)
+                }
 
-              Text {
-                id: nameText
-                anchors.left: dot.right
-                anchors.leftMargin: Style.space(6)
-                anchors.right: stateText.left
-                anchors.rightMargin: Style.space(6)
-                anchors.verticalCenter: parent.verticalCenter
-                elide: Text.ElideRight
-                text: row.modelData.shortName
-                color: root.barForeground
-                font.family: root.bar ? root.bar.fontFamily : Style.font.family
-                font.pixelSize: Style.font.body
+                Text {
+                  id: stateText
+                  anchors.right: toggleBtn.left
+                  anchors.rightMargin: Style.space(6)
+                  anchors.verticalCenter: parent.verticalCenter
+                  text: Model.stateLabel(row.modelData)
+                  color: root.rowColor(row.modelData)
+                  font.family: root.bar ? root.bar.fontFamily : Style.font.family
+                  font.pixelSize: Style.font.bodySmall
+                }
+
+                Text {
+                  id: nameText
+                  anchors.left: dot.right
+                  anchors.leftMargin: Style.space(6)
+                  anchors.right: stateText.left
+                  anchors.rightMargin: Style.space(6)
+                  anchors.verticalCenter: parent.verticalCenter
+                  elide: Text.ElideRight
+                  text: row.modelData.shortName
+                  color: root.rowColor(row.modelData)
+                  font.family: root.bar ? root.bar.fontFamily : Style.font.family
+                  font.pixelSize: Style.font.body
+                }
               }
             }
           }

@@ -5,8 +5,13 @@ into tabs instead of one long flat list.
 
 - Bar icon shows a warning badge with the failed-service count, or a quiet
   gear icon when everything's fine.
-- Click it to open a panel listing every user service, failed ones first,
-  then running, then the rest, each with a colored state dot.
+- Click it to open a panel with a proper title and a live status line
+  ("46 services, all healthy", turning red the moment something fails),
+  same style as Omarchy's own network/bluetooth panels.
+- Below that, every user service, failed ones first, then running, then
+  the rest, each with a colored state dot — and that same color runs
+  through the name and state label too, so a failed row is unmistakable
+  at a glance.
 - Services are grouped into tabs by what they actually are (Audio, Security,
   Portals, Session, Filesystem, Omarchy, System, Other), plus an All tab —
   see "Category taxonomy" below for how that's decided.
@@ -17,7 +22,7 @@ into tabs instead of one long flat list.
 
 ![Bar icon](docs/bar-icon.png)
 
-![Omarchy tab, showing running and stopped services with their action buttons](docs/panel-tabs.png)
+![Panel with the hero header, category tabs, and per-row action buttons](docs/panel-tabs.png)
 
 ## Scope (MVP)
 
@@ -146,6 +151,18 @@ populated — so the tab row doesn't reflow as services start/stop.
 Extending the taxonomy is a one-line addition to `CATEGORY_DEFINITIONS` in
 `Model.js`; add a matching row to `Scenario Outline` in
 `features/organize_panel_into_semantic_tabs.feature` first.
+
+## Panel conventions
+
+The header (icon, bold title, small-caps status line) copies the shipped
+network/bluetooth panels' hero pattern rather than inventing a look — same
+`Style.font.display` icon size, same bold title, same all-caps
+`Style.font.caption` status line below it. Spacing uses the real named
+tokens (`Style.spacing.panelGap`, `.rowGap`, `.popupRowHeight`, etc.) instead
+of raw pixel values, and row state color (urgent/foreground/muted) now
+applies to the dot, name, and state label together rather than just the dot
+and label — this theme has no separate "success" color, so "running" just
+means full-brightness foreground, not a color that doesn't exist here.
 
 ## Testing strategy
 
