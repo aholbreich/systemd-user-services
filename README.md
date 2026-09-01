@@ -3,26 +3,27 @@
 List and control `systemctl --user` services from the Omarchy bar, grouped
 into tabs instead of one long flat list.
 
-- Bar icon shows a warning badge with the count of failed user services;
-  a quiet gear icon otherwise.
-- Click it to open a panel listing every user service, sorted failed →
-  running → the rest, with a colored state indicator per row.
-- Services are grouped into semantic tabs (Audio, Security, Portals, Session,
-  Filesystem, Omarchy, System, Other) alongside an All tab — see "Category
-  taxonomy" below.
-- Start/Stop (context-sensitive toggle) and Restart per row, via compact
-  icon buttons with tooltips — disabled while an action is in flight,
-  failures surface as an error naming the unit and action.
+- Bar icon shows a warning badge with the failed-service count, or a quiet
+  gear icon when everything's fine.
+- Click it to open a panel listing every user service, failed ones first,
+  then running, then the rest, each with a colored state dot.
+- Services are grouped into tabs by what they actually are (Audio, Security,
+  Portals, Session, Filesystem, Omarchy, System, Other), plus an All tab —
+  see "Category taxonomy" below for how that's decided.
+- Start/Stop and Restart on every row, icon buttons with a tooltip so you
+  know what they do. The toggle switches to whichever action makes sense
+  for that unit's current state. Buttons disable while an action's running,
+  and a failed action shows an error naming the unit and what went wrong.
 
 ![Bar icon](docs/bar-icon.png)
 
-![Panel with category tabs and action buttons](docs/panel-tabs.png)
+![Omarchy tab, showing running and stopped services with their action buttons](docs/panel-tabs.png)
 
 ## Scope (MVP)
 
 - `systemctl --user` units only — no root/system-wide units, no privilege escalation.
-- List, categorize, surface failures, and control (start/stop/restart) each
-  unit. One action in flight at a time (not per-row-concurrent).
+- Lists, categorizes, and controls (start/stop/restart) every unit, and
+  flags failures. Only one action runs at a time across the panel.
 - No enable/disable (autostart toggle), no log tailing, no notifications,
   no search/filter yet — see Roadmap.
 - Polling-based refresh (default every 10s, configurable 5–300s), not D-Bus signals.
