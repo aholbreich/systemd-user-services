@@ -1,0 +1,5 @@
+version: 1
+default_claim_ttl: 60m
+id_prefix: task
+actors:
+  require_actor: true

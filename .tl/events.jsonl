@@ -1,0 +1,17 @@
+{"time":"2026-09-01T18:36:33Z","event":"created","task_id":"task-zw9","actor":"claude-code"}
+{"time":"2026-09-01T18:36:33Z","event":"reference_added","task_id":"task-zw9","actor":"claude-code","value":"features/plugin_scaffold_validates.feature"}
+{"time":"2026-09-01T18:36:41Z","event":"created","task_id":"task-ts0","actor":"claude-code"}
+{"time":"2026-09-01T18:36:41Z","event":"reference_added","task_id":"task-ts0","actor":"claude-code","value":"features/list_and_classify_user_services.feature"}
+{"time":"2026-09-01T18:36:41Z","event":"created","task_id":"task-4mm","actor":"claude-code"}
+{"time":"2026-09-01T18:36:41Z","event":"reference_added","task_id":"task-4mm","actor":"claude-code","value":"features/service_polls_and_exposes_units.feature"}
+{"time":"2026-09-01T18:36:41Z","event":"created","task_id":"task-eva","actor":"claude-code"}
+{"time":"2026-09-01T18:36:41Z","event":"reference_added","task_id":"task-eva","actor":"claude-code","value":"features/bar_badge_reflects_failed_count.feature"}
+{"time":"2026-09-01T18:36:41Z","event":"created","task_id":"task-rhq","actor":"claude-code"}
+{"time":"2026-09-01T18:36:41Z","event":"reference_added","task_id":"task-rhq","actor":"claude-code","value":"features/panel_lists_services_by_state.feature"}
+{"time":"2026-09-01T18:36:41Z","event":"created","task_id":"task-6zg","actor":"claude-code"}
+{"time":"2026-09-01T18:36:41Z","event":"reference_added","task_id":"task-6zg","actor":"claude-code","value":"features/start_stop_restart_service.feature"}
+{"time":"2026-09-01T18:36:52Z","event":"dependency_added","task_id":"task-4mm"}
+{"time":"2026-09-01T18:36:52Z","event":"dependency_added","task_id":"task-4mm"}
+{"time":"2026-09-01T18:36:52Z","event":"dependency_added","task_id":"task-eva"}
+{"time":"2026-09-01T18:36:52Z","event":"dependency_added","task_id":"task-rhq"}
+{"time":"2026-09-01T18:36:52Z","event":"dependency_added","task_id":"task-6zg"}
