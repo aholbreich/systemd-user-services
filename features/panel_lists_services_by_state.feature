@@ -54,3 +54,15 @@ Feature: Panel lists user services grouped by state
     Given the last refresh failed with an error
     When I open the panel
     Then the panel shows the error message
+
+  @manual
+  Scenario: A long service list stays inside the panel and scrolls instead of overflowing
+    # Bug (task-687): the row Column had no clip/Flickable, so on a session
+    # with many units the rows spilled past the panel's fitted height instead
+    # of being contained. Fixed by wrapping the whole Column in a Flickable
+    # (clip: true, ScrollBar.vertical AsNeeded), mirroring the shipped
+    # tailscale/bluetooth panels' own long-list pattern exactly.
+    Given the session has more user services than fit in the panel's capped height
+    When I open the panel
+    Then all rows stay within the panel's visible bounds
+    And the list is scrollable to reach the rows below the fold

@@ -1,4 +1,5 @@
 import QtQuick
+import QtQuick.Controls
 import Quickshell
 import qs.Commons
 import qs.Ui
@@ -50,69 +51,85 @@ Panel {
       anchors.fill: parent
       onCloseRequested: root.close()
 
-      Column {
-        id: column
-        width: parent.width
-        spacing: Style.space(6)
+      // Bug (task-687): an unclipped Column let long service lists overflow
+      // the panel's fitted height instead of being contained. Wrapping the
+      // whole Column in a Flickable mirrors the shipped tailscale/bluetooth
+      // panels' own pattern for long lists.
+      Flickable {
+        id: panelFlick
+        anchors.fill: parent
+        contentWidth: width
+        contentHeight: column.implicitHeight
+        clip: true
+        boundsBehavior: Flickable.StopAtBounds
+        flickableDirection: Flickable.VerticalFlick
+        interactive: contentHeight > height
+        ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded }
 
-        Text {
-          width: parent.width
-          visible: services.lastError !== ""
-          text: "Error: " + services.lastError
-          wrapMode: Text.WordWrap
-          color: Color.urgent
-          font.family: root.bar ? root.bar.fontFamily : Style.font.family
-          font.pixelSize: Style.font.bodySmall
-        }
+        Column {
+          id: column
+          width: panelFlick.width
+          spacing: Style.space(6)
 
-        Text {
-          width: parent.width
-          visible: services.lastError === "" && services.units.length === 0
-          text: "No user services found"
-          color: Color.muted
-          font.family: root.bar ? root.bar.fontFamily : Style.font.family
-          font.pixelSize: Style.font.bodySmall
-        }
+          Text {
+            width: parent.width
+            visible: services.lastError !== ""
+            text: "Error: " + services.lastError
+            wrapMode: Text.WordWrap
+            color: Color.urgent
+            font.family: root.bar ? root.bar.fontFamily : Style.font.family
+            font.pixelSize: Style.font.bodySmall
+          }
 
-        Repeater {
-          model: services.units
+          Text {
+            width: parent.width
+            visible: services.lastError === "" && services.units.length === 0
+            text: "No user services found"
+            color: Color.muted
+            font.family: root.bar ? root.bar.fontFamily : Style.font.family
+            font.pixelSize: Style.font.bodySmall
+          }
 
-          delegate: Item {
-            width: column.width
-            height: Math.max(dot.height, nameText.implicitHeight, stateText.implicitHeight) + Style.space(4)
+          Repeater {
+            model: services.units
 
-            Rectangle {
-              id: dot
-              width: Style.space(6)
-              height: Style.space(6)
-              radius: width / 2
-              anchors.left: parent.left
-              anchors.verticalCenter: parent.verticalCenter
-              color: root.rowColor(modelData)
-            }
+            delegate: Item {
+              width: column.width
+              height: Math.max(dot.height, nameText.implicitHeight, stateText.implicitHeight) + Style.space(4)
 
-            Text {
-              id: stateText
-              anchors.right: parent.right
-              anchors.verticalCenter: parent.verticalCenter
-              text: Model.stateLabel(modelData)
-              color: root.rowColor(modelData)
-              font.family: root.bar ? root.bar.fontFamily : Style.font.family
-              font.pixelSize: Style.font.bodySmall
-            }
+              Rectangle {
+                id: dot
+                width: Style.space(6)
+                height: Style.space(6)
+                radius: width / 2
+                anchors.left: parent.left
+                anchors.verticalCenter: parent.verticalCenter
+                color: root.rowColor(modelData)
+              }
 
-            Text {
-              id: nameText
-              anchors.left: dot.right
-              anchors.leftMargin: Style.space(6)
-              anchors.right: stateText.left
-              anchors.rightMargin: Style.space(6)
-              anchors.verticalCenter: parent.verticalCenter
-              elide: Text.ElideRight
-              text: modelData.shortName
-              color: root.barForeground
-              font.family: root.bar ? root.bar.fontFamily : Style.font.family
-              font.pixelSize: Style.font.body
+              Text {
+                id: stateText
+                anchors.right: parent.right
+                anchors.verticalCenter: parent.verticalCenter
+                text: Model.stateLabel(modelData)
+                color: root.rowColor(modelData)
+                font.family: root.bar ? root.bar.fontFamily : Style.font.family
+                font.pixelSize: Style.font.bodySmall
+              }
+
+              Text {
+                id: nameText
+                anchors.left: dot.right
+                anchors.leftMargin: Style.space(6)
+                anchors.right: stateText.left
+                anchors.rightMargin: Style.space(6)
+                anchors.verticalCenter: parent.verticalCenter
+                elide: Text.ElideRight
+                text: modelData.shortName
+                color: root.barForeground
+                font.family: root.bar ? root.bar.fontFamily : Style.font.family
+                font.pixelSize: Style.font.body
+              }
             }
           }
         }
