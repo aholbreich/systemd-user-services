@@ -18,6 +18,12 @@ Panel {
 
   readonly property var badge: Model.badgeState(services.failedCount)
 
+  function rowColor(unit) {
+    if (Model.isFailed(unit)) return Color.urgent
+    if (Model.isRunning(unit)) return Color.foreground
+    return Color.muted
+  }
+
   WidgetButton {
     id: button
     anchors.fill: parent
@@ -36,27 +42,80 @@ Panel {
     bar: root.bar
     open: root.opened
     focusTarget: keyCatcher
-    contentWidth: panel.fittedContentWidth(Style.space(280))
-    contentHeight: panel.fittedContentHeight(placeholder.implicitHeight, Style.space(200))
+    contentWidth: panel.fittedContentWidth(Style.space(320))
+    contentHeight: panel.fittedContentHeight(column.implicitHeight, Style.space(400))
 
     PanelKeyCatcher {
       id: keyCatcher
       anchors.fill: parent
       onCloseRequested: root.close()
 
-      Text {
-        // Placeholder pending task-rhq (row-by-row list) / task-eva (badge);
-        // this story (task-4mm) only needs to prove the service polls and
-        // exposes live state, so surface it minimally rather than not at all.
-        id: placeholder
+      Column {
+        id: column
         width: parent.width
-        text: services.lastError !== ""
-          ? "Error: " + services.lastError
-          : services.units.length + " user services (" + services.failedCount + " failed)"
-        wrapMode: Text.WordWrap
-        color: root.barForeground
-        font.family: root.bar ? root.bar.fontFamily : Style.font.family
-        font.pixelSize: Style.font.body
+        spacing: Style.space(6)
+
+        Text {
+          width: parent.width
+          visible: services.lastError !== ""
+          text: "Error: " + services.lastError
+          wrapMode: Text.WordWrap
+          color: Color.urgent
+          font.family: root.bar ? root.bar.fontFamily : Style.font.family
+          font.pixelSize: Style.font.bodySmall
+        }
+
+        Text {
+          width: parent.width
+          visible: services.lastError === "" && services.units.length === 0
+          text: "No user services found"
+          color: Color.muted
+          font.family: root.bar ? root.bar.fontFamily : Style.font.family
+          font.pixelSize: Style.font.bodySmall
+        }
+
+        Repeater {
+          model: services.units
+
+          delegate: Item {
+            width: column.width
+            height: Math.max(dot.height, nameText.implicitHeight, stateText.implicitHeight) + Style.space(4)
+
+            Rectangle {
+              id: dot
+              width: Style.space(6)
+              height: Style.space(6)
+              radius: width / 2
+              anchors.left: parent.left
+              anchors.verticalCenter: parent.verticalCenter
+              color: root.rowColor(modelData)
+            }
+
+            Text {
+              id: stateText
+              anchors.right: parent.right
+              anchors.verticalCenter: parent.verticalCenter
+              text: Model.stateLabel(modelData)
+              color: root.rowColor(modelData)
+              font.family: root.bar ? root.bar.fontFamily : Style.font.family
+              font.pixelSize: Style.font.bodySmall
+            }
+
+            Text {
+              id: nameText
+              anchors.left: dot.right
+              anchors.leftMargin: Style.space(6)
+              anchors.right: stateText.left
+              anchors.rightMargin: Style.space(6)
+              anchors.verticalCenter: parent.verticalCenter
+              elide: Text.ElideRight
+              text: modelData.shortName
+              color: root.barForeground
+              font.family: root.bar ? root.bar.fontFamily : Style.font.family
+              font.pixelSize: Style.font.body
+            }
+          }
+        }
       }
     }
   }

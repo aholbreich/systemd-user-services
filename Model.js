@@ -57,6 +57,12 @@ function countFailed(units) {
   return (units || []).filter(isFailed).length
 }
 
+function stateLabel(unit) {
+  if (!unit) return ""
+  if (!unit.subState || unit.subState === unit.activeState) return unit.activeState
+  return unit.activeState + " (" + unit.subState + ")"
+}
+
 function badgeState(failedCount) {
   if (failedCount <= 0) {
     return { icon: "⚙", badge: "", tooltip: "User services" }
@@ -77,6 +83,7 @@ if (typeof module !== "undefined") {
     isRunning: isRunning,
     sortUnits: sortUnits,
     countFailed: countFailed,
-    badgeState: badgeState
+    badgeState: badgeState,
+    stateLabel: stateLabel
   }
 }

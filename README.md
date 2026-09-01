@@ -77,6 +77,16 @@ even Omarchy's own first-party plugins produce hundreds of `unresolved-type`
 / `unqualified` warnings under the exact command above. Judge by **exit
 code**, not warning count, when checking whether qmllint is "clean".
 
+**Because qmllint can't resolve `qs.*`, it also can't catch an invented
+token on `Color`/`Style`.** `qmllint` exiting 0 does not mean `Color.error`
+or `Style.font.small` are real properties — they aren't (real ones:
+`Color.urgent`/`foreground`/`muted`/`accent`, `Style.font.bodySmall`/`body`/
+`caption`/etc; see `$OMARCHY_PATH/shell/Commons/{Color,Style}.qml`). A typo'd
+token silently evaluates to `undefined` and only surfaces as a runtime
+warning (`Unable to assign [undefined] to int/color`) after a real restart —
+grep the actual Commons source for a token before using it, don't guess from
+convention or memory.
+
 ## Testing strategy
 
 - **Automated (`npm test`, cucumber-js + Gherkin):** anything expressible as
