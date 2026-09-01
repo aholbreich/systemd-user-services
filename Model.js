@@ -63,6 +63,63 @@ function stateLabel(unit) {
   return unit.activeState + " (" + unit.subState + ")"
 }
 
+// Semantic tab taxonomy. systemd carries no category metadata for units,
+// so this is a hand-curated keyword lookup against each unit's short name,
+// grounded in a real Omarchy desktop's unit census (see README's
+// "Category taxonomy" section for the full rationale) -- not a generic
+// media/network/sync/dev/utilities guess, which doesn't fit what actually
+// runs here (no sync agents, almost no network services, no dev tools).
+// Order matters: first keyword match wins, most-specific categories first.
+var CATEGORY_DEFINITIONS = [
+  { key: "audio", label: "Audio", keywords: ["pipewire", "pulseaudio", "wireplumber"] },
+  { key: "security", label: "Security", keywords: ["keyring", "gpg-agent", "dirmngr", "keyboxd", "p11-kit", "bt-agent"] },
+  { key: "portals", label: "Portals", keywords: ["xdg-", "portal", "at-spi", "dbus-broker", "dbus-:", "dconf"] },
+  { key: "session", label: "Session", keywords: ["wayland-session", "wayland-wm"] },
+  { key: "filesystem", label: "Filesystem", keywords: ["gvfs"] },
+  { key: "omarchy", label: "Omarchy", keywords: ["omarchy-"] },
+  { key: "system", label: "System", keywords: ["systemd-"] }
+]
+var OTHER_CATEGORY = { key: "other", label: "Other" }
+
+// Fixed tab order: All, every real category, Other last. Fixed (not
+// derived from what's currently running) so the tab row doesn't jump
+// around as services start/stop.
+var CATEGORY_KEYS = ["all"].concat(CATEGORY_DEFINITIONS.map(function(d) { return d.key })).concat([OTHER_CATEGORY.key])
+
+function categorize(unit) {
+  if (!unit) return OTHER_CATEGORY.key
+  var name = String(unit.shortName || "").toLowerCase()
+  for (var i = 0; i < CATEGORY_DEFINITIONS.length; i++) {
+    var def = CATEGORY_DEFINITIONS[i]
+    for (var j = 0; j < def.keywords.length; j++) {
+      if (name.indexOf(def.keywords[j]) !== -1) return def.key
+    }
+  }
+  return OTHER_CATEGORY.key
+}
+
+function categoryLabel(key) {
+  if (key === "all") return "All"
+  var def = CATEGORY_DEFINITIONS.filter(function(d) { return d.key === key })[0]
+  return def ? def.label : OTHER_CATEGORY.label
+}
+
+// Groups an already-sorted (failed-first) unit list into the fixed set of
+// tabs, preserving each unit's relative order within its tab.
+function groupUnitsByCategory(units) {
+  var byKey = {}
+  CATEGORY_KEYS.forEach(function(key) { byKey[key] = [] })
+
+  ;(units || []).forEach(function(unit) {
+    byKey.all.push(unit)
+    byKey[categorize(unit)].push(unit)
+  })
+
+  return CATEGORY_KEYS.map(function(key) {
+    return { key: key, label: categoryLabel(key), units: byKey[key], count: byKey[key].length }
+  })
+}
+
 function badgeState(failedCount) {
   if (failedCount <= 0) {
     return { icon: "⚙", badge: "", tooltip: "User services" }
@@ -84,6 +141,10 @@ if (typeof module !== "undefined") {
     sortUnits: sortUnits,
     countFailed: countFailed,
     badgeState: badgeState,
-    stateLabel: stateLabel
+    stateLabel: stateLabel,
+    categorize: categorize,
+    categoryLabel: categoryLabel,
+    groupUnitsByCategory: groupUnitsByCategory,
+    CATEGORY_KEYS: CATEGORY_KEYS
   }
 }

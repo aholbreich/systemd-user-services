@@ -4,6 +4,9 @@ List and control `systemctl --user` services from the Omarchy bar.
 
 - Bar icon shows a warning badge with the count of failed user services.
 - Click it to open a panel listing every user service, sorted failed → running → the rest.
+- Services are grouped into semantic tabs (Audio, Security, Portals, Session,
+  Filesystem, Omarchy, System, Other) alongside an All tab — see "Category
+  taxonomy" below.
 - Start / Stop / Restart each unit inline.
 
 ## Scope (MVP)
@@ -86,6 +89,41 @@ token silently evaluates to `undefined` and only surfaces as a runtime
 warning (`Unable to assign [undefined] to int/color`) after a real restart —
 grep the actual Commons source for a token before using it, don't guess from
 convention or memory.
+
+## Category taxonomy
+
+systemd carries no semantic category metadata for units, so the panel's tabs
+are a hand-curated keyword lookup (`Model.js`'s `CATEGORY_DEFINITIONS`)
+matched against each unit's short name, not the original task description's
+illustrative `media/network/sync/dev/utilities` examples — those don't fit
+what actually runs on an Omarchy desktop. The set below was derived from this
+machine's real 46-unit census (`systemctl --user list-units`), which came out
+dominated by desktop-session plumbing rather than end-user apps:
+
+| Tab | Keywords (substring match on short name) | Rationale |
+|---|---|---|
+| Audio | `pipewire`, `pulseaudio`, `wireplumber` | The audio stack |
+| Security | `keyring`, `gpg-agent`, `dirmngr`, `keyboxd`, `p11-kit`, `bt-agent` | Credential/keyring/pairing agents |
+| Portals | `xdg-`, `portal`, `at-spi`, `dbus-broker`, `dbus-:`, `dconf` | Desktop-integration buses and sandboxing portals |
+| Session | `wayland-session`, `wayland-wm` | The compositor/session lifecycle itself |
+| Filesystem | `gvfs` | Virtual filesystem / volume monitoring |
+| Omarchy | `omarchy-` | Omarchy's own scripts/services |
+| System | `systemd-` | systemd's own user-level daemons |
+| Other | (no match) | Catch-all — on this machine: a trading-platform gateway, a voice-to-text daemon, and a couple of app-specific autostart notifiers |
+
+Matching is substring-based against the lowercased short name (keyword order
+matters — first match wins, most-specific categories first), not exact/prefix
+matching, since escaped systemd unit names
+(`app-gnome\x2dkeyring\x2dpkcs11@autostart`) don't survive a strict prefix
+check. On this machine's real census, only 4/46 units (~9%) land in Other.
+
+Tabs are a **fixed set** (`Model.CATEGORY_KEYS`), always shown even at a
+count of 0 with their own empty state — not derived from what's currently
+populated — so the tab row doesn't reflow as services start/stop.
+
+Extending the taxonomy is a one-line addition to `CATEGORY_DEFINITIONS` in
+`Model.js`; add a matching row to `Scenario Outline` in
+`features/organize_panel_into_semantic_tabs.feature` first.
 
 ## Testing strategy
 

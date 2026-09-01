@@ -18,6 +18,9 @@ Panel {
   }
 
   readonly property var badge: Model.badgeState(services.failedCount)
+  readonly property var tabs: Model.groupUnitsByCategory(services.units)
+  property int selectedTabIndex: 0
+  readonly property var currentTab: tabs[Math.min(selectedTabIndex, tabs.length - 1)]
 
   function rowColor(unit) {
     if (Model.isFailed(unit)) return Color.urgent
@@ -81,17 +84,45 @@ Panel {
             font.pixelSize: Style.font.bodySmall
           }
 
+          // Fixed tab set (task-xdw): same key set every time, even at 0,
+          // so the row doesn't reflow as services start/stop. Flow (not a
+          // fixed-width Row like the DNS-provider pills) because there are
+          // 9 tabs here vs. the shipped examples' 2-4 -- they'd be
+          // illegibly narrow forced into one even-width row.
+          Flow {
+            width: parent.width
+            spacing: Style.space(6)
+
+            Repeater {
+              model: root.tabs
+
+              Button {
+                required property var modelData
+                required property int index
+
+                text: modelData.label + " (" + modelData.count + ")"
+                selected: index === root.selectedTabIndex
+                bordered: true
+                foreground: root.barForeground
+                fontFamily: root.bar ? root.bar.fontFamily : Style.font.family
+                fontSize: Style.font.bodySmall
+                verticalPadding: Style.spacing.controlPaddingY
+                onClicked: root.selectedTabIndex = index
+              }
+            }
+          }
+
           Text {
             width: parent.width
-            visible: services.lastError === "" && services.units.length === 0
-            text: "No user services found"
+            visible: services.lastError === "" && root.currentTab.units.length === 0
+            text: root.currentTab.key === "all" ? "No user services found" : "No services in " + root.currentTab.label
             color: Color.muted
             font.family: root.bar ? root.bar.fontFamily : Style.font.family
             font.pixelSize: Style.font.bodySmall
           }
 
           Repeater {
-            model: services.units
+            model: root.currentTab.units
 
             delegate: Item {
               width: column.width
