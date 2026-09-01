@@ -41,7 +41,7 @@ directly in `~/.config/omarchy/shell.json`'s layout entry for this plugin):
 ## Install
 
 ```sh
-omarchy plugin add <this-repo-url> --enable
+omarchy plugin add https://github.com/aholbreich/systemd-user-services.git --enable
 ```
 
 ## Development
