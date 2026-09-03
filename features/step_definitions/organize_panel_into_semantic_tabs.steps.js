@@ -24,12 +24,17 @@ Given("a session with {int} audio services and 0 services in every other categor
   for (var i = 0; i < count; i++) this.tabUnits.push(makeUnit("pipewire-" + i + ".service"))
 })
 
-Given("a failed audio service {string}, a running audio service {string}, and a failed security service {string}", function(a, b, c) {
-  this.tabUnits = [
-    makeUnit(a + ".service", "failed", "failed"),
+Given("a failed audio service {string}, a running audio service {string}, and a failed security service {string}, listed out of order", function(a, b, c) {
+  // Constructed running-before-failed, then run through the real
+  // Model.sortUnits (the same function Model.parseUnits calls internally)
+  // -- so this actually proves failed-first order survives the pipeline,
+  // rather than merely preserving whatever order the fixture was listed in.
+  var unsorted = [
     makeUnit(b + ".service", "active", "running"),
+    makeUnit(a + ".service", "failed", "failed"),
     makeUnit(c + ".service", "failed", "failed")
   ]
+  this.tabUnits = Model.sortUnits(unsorted)
 })
 
 When("the units are grouped into tabs", function() {

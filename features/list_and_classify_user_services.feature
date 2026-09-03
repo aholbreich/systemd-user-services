@@ -12,7 +12,7 @@ Feature: List and classify systemd --user services
     Given a unit "sshd.service" with active state "active" and sub state "running"
     When the units are parsed
     Then the unit "sshd" is classified as running
-    And it is not classified as failed
+    And the unit "sshd" is not classified as failed
 
   Scenario: A crashed service is classified as failed
     Given a unit "backup.service" with active state "failed" and sub state "failed"

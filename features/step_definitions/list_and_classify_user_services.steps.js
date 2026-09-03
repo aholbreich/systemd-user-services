@@ -48,9 +48,8 @@ Then("the unit {string} is classified as running", function(shortName) {
   assert.equal(Model.isRunning(findUnit(this.result, shortName)), true)
 })
 
-Then("it is not classified as failed", function() {
-  const lastUnit = this.result.units[this.result.units.length - 1]
-  assert.equal(Model.isFailed(lastUnit), false)
+Then("the unit {string} is not classified as failed", function(shortName) {
+  assert.equal(Model.isFailed(findUnit(this.result, shortName)), false)
 })
 
 Then("the unit {string} is classified as failed", function(shortName) {

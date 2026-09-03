@@ -59,10 +59,16 @@ Feature: Panel lists user services grouped by state
   Scenario: A long service list stays inside the panel and scrolls instead of overflowing
     # Bug (task-687): the row Column had no clip/Flickable, so on a session
     # with many units the rows spilled past the panel's fitted height instead
-    # of being contained. Fixed by wrapping the whole Column in a Flickable
-    # (clip: true, ScrollBar.vertical AsNeeded), mirroring the shipped
-    # tailscale/bluetooth panels' own long-list pattern exactly.
-    Given the session has more user services than fit in the panel's capped height
+    # of being contained. Originally fixed by wrapping the WHOLE column
+    # (hero, tabs, row list) in one Flickable capped at a fixed height,
+    # mirroring tailscale's pattern -- but that meant the hero/tabs added
+    # later (task-fn8) ate into that same fixed budget as the row list,
+    # regressing to only ~5 visible rows (task-5nm). Now mirrors bluetooth's
+    # panel instead: hero/tabs/section header size naturally and stay
+    # unscrolled; only the row list itself is a ListView, independently
+    # height-capped (~11 rows) and scrollable.
+    Given the session has more user services than fit in the row list's capped height
     When I open the panel
-    Then all rows stay within the panel's visible bounds
+    Then the hero, tabs, and section header stay visible above the row list
+    And all rows stay within the row list's visible bounds
     And the list is scrollable to reach the rows below the fold

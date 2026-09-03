@@ -28,10 +28,14 @@ Feature: Organize the service panel into semantic tabs
       | gnome-keyring-daemon.service                    | security   |
       | gpg-agent.service                                | security   |
       | bt-agent.service                                 | security   |
+      | dirmngr.service                                  | security   |
+      | keyboxd.service                                  | security   |
+      | p11-kit-server.service                           | security   |
       | xdg-desktop-portal.service                       | portals    |
       | xdg-desktop-portal-hyprland.service              | portals    |
       | at-spi-dbus-bus.service                          | portals    |
       | dbus-broker.service                              | portals    |
+      | dbus-:1.21-org.a11y.atspi.Registry@0.service     | portals    |
       | dconf.service                                    | portals    |
       | wayland-wm@hyprland.desktop.service              | session    |
       | wayland-session-waitenv.service                  | session    |
@@ -53,7 +57,12 @@ Feature: Organize the service panel into semantic tabs
 
   @automated
   Scenario: Filtering by category preserves the existing failed-first order
-    Given a failed audio service "pipewire", a running audio service "wireplumber", and a failed security service "gpg-agent"
+    # Units are deliberately given out of failed-first order (running listed
+    # before failed) -- the step runs them through the real Model.sortUnits,
+    # the same function Service.qml's parseUnits pipeline calls, so this
+    # scenario actually exercises re-ordering rather than merely preserving
+    # whatever order the fixture happened to already be listed in.
+    Given a failed audio service "pipewire", a running audio service "wireplumber", and a failed security service "gpg-agent", listed out of order
     When the units are grouped into tabs
     Then the "audio" tab's units in order are "pipewire, wireplumber"
 
