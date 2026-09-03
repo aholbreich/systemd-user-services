@@ -106,3 +106,6 @@
 {"time":"2026-09-03T22:57:15Z","event":"claimed","task_id":"task-66g","actor":"claude-code"}
 {"time":"2026-09-03T22:57:35Z","event":"note_added","task_id":"task-66g","actor":"claude-code"}
 {"time":"2026-09-03T22:57:38Z","event":"closed","task_id":"task-66g","actor":"claude-code"}
+{"time":"2026-09-03T23:01:59Z","event":"created","task_id":"task-21e","actor":"human"}
+{"time":"2026-09-03T23:01:59Z","event":"reference_added","task_id":"task-21e","actor":"human","value":"Panel.qml"}
+{"time":"2026-09-03T23:01:59Z","event":"reference_added","task_id":"task-21e","actor":"human","value":"Model.js"}
