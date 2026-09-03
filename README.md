@@ -49,6 +49,12 @@ directly in `~/.config/omarchy/shell.json`'s layout entry for this plugin):
 omarchy plugin add https://github.com/aholbreich/systemd-user-services.git --enable
 ```
 
+## Uninstall
+
+```sh
+omarchy plugin remove io.github.aholbreich.systemd-user-services
+```
+
 ## Development
 
 This repo doubles as a working checkout: the plugin loads straight from it
