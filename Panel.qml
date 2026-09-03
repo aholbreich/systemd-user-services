@@ -46,7 +46,11 @@ Panel {
     text: modelData.label
     tooltipText: modelData.count + (modelData.count === 1 ? " service" : " services")
     selected: modelData.key === root.selectedTabKey
-    bordered: true
+    // "All" isn't a category like the rest (task feedback): it's the
+    // absence of a filter, not a peer of Audio/Security/etc, so it skips
+    // the bordered pill treatment in its idle state -- Button's own
+    // selected/hover states still apply normally when it's active.
+    bordered: modelData.key !== "all"
     foreground: root.barForeground
     fontFamily: root.bar ? root.bar.fontFamily : Style.font.family
     fontSize: Style.font.bodySmall
@@ -85,237 +89,239 @@ Panel {
     open: root.opened
     focusTarget: keyCatcher
     contentWidth: panel.fittedContentWidth(Style.space(420))
-    contentHeight: panel.fittedContentHeight(column.implicitHeight, Style.space(400))
+    contentHeight: panel.fittedContentHeight(column.implicitHeight)
 
     PanelKeyCatcher {
       id: keyCatcher
       anchors.fill: parent
       onCloseRequested: root.close()
 
-      // Bug (task-687): an unclipped Column let long service lists overflow
-      // the panel's fitted height instead of being contained. Wrapping the
-      // whole Column in a Flickable mirrors the shipped tailscale/bluetooth
-      // panels' own pattern for long lists.
-      Flickable {
-        id: panelFlick
+      // Bug (task-5nm): wrapping the *whole* column (hero, tabs, header
+      // included) in one capped Flickable -- as task-687 originally did,
+      // copying tailscale's pattern -- meant the hero/tabs/separators ate
+      // into the same fixed height budget as the row list, leaving only
+      // ~5 of 46 rows visible once the hero header (task-fn8) landed on
+      // top of that budget. Mirrors bluetooth's panel instead: hero/tabs
+      // stay unscrolled at their natural height, and only the row list
+      // below is height-capped and independently scrollable.
+      Column {
+        id: column
         anchors.fill: parent
-        contentWidth: width
-        contentHeight: column.implicitHeight
-        clip: true
-        boundsBehavior: Flickable.StopAtBounds
-        flickableDirection: Flickable.VerticalFlick
-        interactive: contentHeight > height
-        ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded }
+        // task-x0j: named semantic tokens instead of ad-hoc Style.space(6)
+        // everywhere -- panelGap between major sections (hero, tabs,
+        // header, list), tighter tokens within each section below.
+        spacing: Style.spacing.panelGap
 
-        Column {
-          id: column
-          width: panelFlick.width
-          // task-x0j: named semantic tokens instead of ad-hoc Style.space(6)
-          // everywhere -- panelGap between major sections (hero, tabs,
-          // header, list), tighter tokens within each section below.
-          spacing: Style.spacing.panelGap
+        // ---------- Hero: icon · title · live status (task-fn8) ----------
+        // Mirrors the real network/bluetooth panels' hero convention: a
+        // big icon, a bold title, and a small-caps status line -- not the
+        // task's own literal "SYSTEMD USER SERVICES" all-caps suggestion,
+        // which doesn't match how the shipped panels actually do it.
+        Item {
+          id: hero
+          width: parent.width
+          implicitHeight: Math.max(heroIcon.implicitHeight, heroLabels.implicitHeight)
 
-          // ---------- Hero: icon · title · live status (task-fn8) ----------
-          // Mirrors the real network/bluetooth panels' hero convention: a
-          // big icon, a bold title, and a small-caps status line -- not the
-          // task's own literal "SYSTEMD USER SERVICES" all-caps suggestion,
-          // which doesn't match how the shipped panels actually do it.
-          Item {
-            id: hero
-            width: parent.width
-            implicitHeight: Math.max(heroIcon.implicitHeight, heroLabels.implicitHeight)
+          Text {
+            id: heroIcon
+            textFormat: Text.PlainText
+            text: root.badge.icon
+            color: root.heroStatus.urgent ? Color.urgent : root.barForeground
+            font.family: root.bar ? root.bar.fontFamily : Style.font.family
+            font.pixelSize: Style.font.display
+            anchors.left: parent.left
+            anchors.verticalCenter: parent.verticalCenter
+          }
+
+          Column {
+            id: heroLabels
+            anchors.left: heroIcon.right
+            anchors.leftMargin: Style.spacing.xxl
+            anchors.right: parent.right
+            anchors.verticalCenter: parent.verticalCenter
+            spacing: Style.spacing.xxs
 
             Text {
-              id: heroIcon
+              width: parent.width
               textFormat: Text.PlainText
-              text: root.badge.icon
-              color: root.heroStatus.urgent ? Color.urgent : root.barForeground
+              text: "Systemd Services"
+              color: root.barForeground
               font.family: root.bar ? root.bar.fontFamily : Style.font.family
-              font.pixelSize: Style.font.display
+              font.pixelSize: Style.font.title
+              font.bold: true
+              elide: Text.ElideRight
+            }
+
+            Text {
+              width: parent.width
+              textFormat: Text.PlainText
+              text: root.heroStatus.text.toUpperCase()
+              color: root.heroStatus.urgent ? Color.urgent : Color.muted
+              font.family: root.bar ? root.bar.fontFamily : Style.font.family
+              font.pixelSize: Style.font.caption
+              font.bold: true
+              font.letterSpacing: 1.2
+              elide: Text.ElideRight
+            }
+          }
+        }
+
+        PanelSeparator {
+          foreground: root.barForeground
+        }
+
+        Text {
+          width: parent.width
+          height: visible ? implicitHeight : 0
+          visible: services.lastError !== ""
+          text: "Error: " + services.lastError
+          wrapMode: Text.WordWrap
+          color: Color.urgent
+          font.family: root.bar ? root.bar.fontFamily : Style.font.family
+          font.pixelSize: Style.font.bodySmall
+        }
+
+        Text {
+          width: parent.width
+          height: visible ? implicitHeight : 0
+          visible: services.lastActionError !== ""
+          text: "Error: " + services.lastActionError
+          wrapMode: Text.WordWrap
+          color: Color.urgent
+          font.family: root.bar ? root.bar.fontFamily : Style.font.family
+          font.pixelSize: Style.font.bodySmall
+        }
+
+        // Fixed tab set (task-xdw): same key set every time, even at 0,
+        // so the row doesn't reflow as services start/stop.
+        Column {
+          width: parent.width
+          spacing: Style.spacing.sm
+
+          Row {
+            spacing: Style.spacing.md
+            Repeater {
+              model: root.tabsRow1
+              delegate: TabButton {}
+            }
+          }
+
+          Row {
+            spacing: Style.spacing.md
+            Repeater {
+              model: root.tabsRow2
+              delegate: TabButton {}
+            }
+          }
+        }
+
+        PanelSeparator {
+          foreground: root.barForeground
+        }
+
+        PanelSectionHeader {
+          text: root.currentTab.label.toUpperCase() + " (" + root.currentTab.count + ")"
+          foreground: root.barForeground
+          fontFamily: root.bar ? root.bar.fontFamily : Style.font.family
+        }
+
+        Text {
+          width: parent.width
+          height: visible ? implicitHeight : 0
+          visible: services.lastError === "" && root.currentTab.units.length === 0
+          text: root.currentTab.key === "all" ? "No user services found" : "No services in " + root.currentTab.label
+          color: Color.muted
+          font.family: root.bar ? root.bar.fontFamily : Style.font.family
+          font.pixelSize: Style.font.bodySmall
+        }
+
+        // Height-capped and independently scrollable (task-5nm) -- mirrors
+        // the shipped bluetooth panel's deviceListView: a fixed budget
+        // (~11 rows at popupRowHeight) regardless of how many services a
+        // tab holds, rather than the whole panel growing (or, as before
+        // this fix, the whole panel's Flickable budget being eaten by the
+        // hero/tabs above it).
+        ListView {
+          id: serviceList
+          width: parent.width
+          height: Math.min(contentHeight, Style.space(400))
+          spacing: Style.spacing.rowGap
+          clip: true
+          boundsBehavior: Flickable.StopAtBounds
+          interactive: contentHeight > height
+          ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded }
+
+          model: root.currentTab.units
+
+          delegate: Item {
+            id: row
+            required property var modelData
+
+            readonly property var toggle: Model.toggleAction(modelData)
+            readonly property bool busy: services.pendingUnit !== ""
+            readonly property bool thisRowBusy: services.pendingUnit === modelData.name
+
+            width: ListView.view.width
+            height: Math.max(dot.height, nameText.implicitHeight, stateText.implicitHeight,
+                              toggleBtn.implicitHeight, restartBtn.implicitHeight,
+                              Style.spacing.popupRowHeight)
+
+            Rectangle {
+              id: dot
+              width: Style.space(6)
+              height: Style.space(6)
+              radius: width / 2
               anchors.left: parent.left
               anchors.verticalCenter: parent.verticalCenter
+              color: root.rowColor(row.modelData)
             }
 
-            Column {
-              id: heroLabels
-              anchors.left: heroIcon.right
-              anchors.leftMargin: Style.spacing.xxl
+            RowActionButton {
+              id: restartBtn
               anchors.right: parent.right
               anchors.verticalCenter: parent.verticalCenter
-              spacing: Style.spacing.xxs
-
-              Text {
-                width: parent.width
-                textFormat: Text.PlainText
-                text: "Systemd Services"
-                color: root.barForeground
-                font.family: root.bar ? root.bar.fontFamily : Style.font.family
-                font.pixelSize: Style.font.title
-                font.bold: true
-                elide: Text.ElideRight
-              }
-
-              Text {
-                width: parent.width
-                textFormat: Text.PlainText
-                text: root.heroStatus.text.toUpperCase()
-                color: root.heroStatus.urgent ? Color.urgent : Color.muted
-                font.family: root.bar ? root.bar.fontFamily : Style.font.family
-                font.pixelSize: Style.font.caption
-                font.bold: true
-                font.letterSpacing: 1.2
-                elide: Text.ElideRight
-              }
-            }
-          }
-
-          PanelSeparator {
-            foreground: root.barForeground
-          }
-
-          Text {
-            width: parent.width
-            height: visible ? implicitHeight : 0
-            visible: services.lastError !== ""
-            text: "Error: " + services.lastError
-            wrapMode: Text.WordWrap
-            color: Color.urgent
-            font.family: root.bar ? root.bar.fontFamily : Style.font.family
-            font.pixelSize: Style.font.bodySmall
-          }
-
-          Text {
-            width: parent.width
-            height: visible ? implicitHeight : 0
-            visible: services.lastActionError !== ""
-            text: "Error: " + services.lastActionError
-            wrapMode: Text.WordWrap
-            color: Color.urgent
-            font.family: root.bar ? root.bar.fontFamily : Style.font.family
-            font.pixelSize: Style.font.bodySmall
-          }
-
-          // Fixed tab set (task-xdw): same key set every time, even at 0,
-          // so the row doesn't reflow as services start/stop.
-          Column {
-            width: parent.width
-            spacing: Style.spacing.sm
-
-            Row {
-              spacing: Style.spacing.md
-              Repeater {
-                model: root.tabsRow1
-                delegate: TabButton {}
-              }
+              iconText: "↻"
+              tooltipText: row.thisRowBusy && services.pendingVerb === "restart" ? "Restarting…" : "Restart"
+              enabled: !row.busy
+              onClicked: services.restartUnit(row.modelData.name)
             }
 
-            Row {
-              spacing: Style.spacing.md
-              Repeater {
-                model: root.tabsRow2
-                delegate: TabButton {}
-              }
+            RowActionButton {
+              id: toggleBtn
+              anchors.right: restartBtn.left
+              anchors.rightMargin: Style.space(4)
+              anchors.verticalCenter: parent.verticalCenter
+              iconText: row.toggle.verb === "stop" ? "⏹" : "▶"
+              tooltipText: row.thisRowBusy ? row.toggle.label + "ing…" : row.toggle.label
+              enabled: !row.busy
+              onClicked: row.toggle.verb === "stop"
+                ? services.stopUnit(row.modelData.name)
+                : services.startUnit(row.modelData.name)
             }
-          }
 
-          PanelSeparator {
-            foreground: root.barForeground
-          }
+            Text {
+              id: stateText
+              anchors.right: toggleBtn.left
+              anchors.rightMargin: Style.space(6)
+              anchors.verticalCenter: parent.verticalCenter
+              text: Model.stateLabel(row.modelData)
+              color: root.rowColor(row.modelData)
+              font.family: root.bar ? root.bar.fontFamily : Style.font.family
+              font.pixelSize: Style.font.bodySmall
+            }
 
-          PanelSectionHeader {
-            text: root.currentTab.label.toUpperCase() + " (" + root.currentTab.count + ")"
-            foreground: root.barForeground
-            fontFamily: root.bar ? root.bar.fontFamily : Style.font.family
-          }
-
-          Text {
-            width: parent.width
-            height: visible ? implicitHeight : 0
-            visible: services.lastError === "" && root.currentTab.units.length === 0
-            text: root.currentTab.key === "all" ? "No user services found" : "No services in " + root.currentTab.label
-            color: Color.muted
-            font.family: root.bar ? root.bar.fontFamily : Style.font.family
-            font.pixelSize: Style.font.bodySmall
-          }
-
-          Column {
-            width: parent.width
-            spacing: Style.spacing.rowGap
-
-            Repeater {
-              model: root.currentTab.units
-
-              delegate: Item {
-                id: row
-                required property var modelData
-
-                readonly property var toggle: Model.toggleAction(modelData)
-                readonly property bool busy: services.pendingUnit !== ""
-                readonly property bool thisRowBusy: services.pendingUnit === modelData.name
-
-                width: parent.width
-                height: Math.max(dot.height, nameText.implicitHeight, stateText.implicitHeight,
-                                  toggleBtn.implicitHeight, restartBtn.implicitHeight,
-                                  Style.spacing.popupRowHeight)
-
-                Rectangle {
-                  id: dot
-                  width: Style.space(6)
-                  height: Style.space(6)
-                  radius: width / 2
-                  anchors.left: parent.left
-                  anchors.verticalCenter: parent.verticalCenter
-                  color: root.rowColor(row.modelData)
-                }
-
-                RowActionButton {
-                  id: restartBtn
-                  anchors.right: parent.right
-                  anchors.verticalCenter: parent.verticalCenter
-                  iconText: "↻"
-                  tooltipText: row.thisRowBusy && services.pendingVerb === "restart" ? "Restarting…" : "Restart"
-                  enabled: !row.busy
-                  onClicked: services.restartUnit(row.modelData.name)
-                }
-
-                RowActionButton {
-                  id: toggleBtn
-                  anchors.right: restartBtn.left
-                  anchors.rightMargin: Style.space(4)
-                  anchors.verticalCenter: parent.verticalCenter
-                  iconText: row.toggle.verb === "stop" ? "⏹" : "▶"
-                  tooltipText: row.thisRowBusy ? row.toggle.label + "ing…" : row.toggle.label
-                  enabled: !row.busy
-                  onClicked: row.toggle.verb === "stop"
-                    ? services.stopUnit(row.modelData.name)
-                    : services.startUnit(row.modelData.name)
-                }
-
-                Text {
-                  id: stateText
-                  anchors.right: toggleBtn.left
-                  anchors.rightMargin: Style.space(6)
-                  anchors.verticalCenter: parent.verticalCenter
-                  text: Model.stateLabel(row.modelData)
-                  color: root.rowColor(row.modelData)
-                  font.family: root.bar ? root.bar.fontFamily : Style.font.family
-                  font.pixelSize: Style.font.bodySmall
-                }
-
-                Text {
-                  id: nameText
-                  anchors.left: dot.right
-                  anchors.leftMargin: Style.space(6)
-                  anchors.right: stateText.left
-                  anchors.rightMargin: Style.space(6)
-                  anchors.verticalCenter: parent.verticalCenter
-                  elide: Text.ElideRight
-                  text: row.modelData.shortName
-                  color: root.rowColor(row.modelData)
-                  font.family: root.bar ? root.bar.fontFamily : Style.font.family
-                  font.pixelSize: Style.font.body
-                }
-              }
+            Text {
+              id: nameText
+              anchors.left: dot.right
+              anchors.leftMargin: Style.space(6)
+              anchors.right: stateText.left
+              anchors.rightMargin: Style.space(6)
+              anchors.verticalCenter: parent.verticalCenter
+              elide: Text.ElideRight
+              text: row.modelData.shortName
+              color: root.rowColor(row.modelData)
+              font.family: root.bar ? root.bar.fontFamily : Style.font.family
+              font.pixelSize: Style.font.body
             }
           }
         }

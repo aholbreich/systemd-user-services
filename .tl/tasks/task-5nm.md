@@ -1,11 +1,11 @@
 ---
 id: task-5nm
 title: 'Bug: All tab only shows ~5 of 46 services without obvious way to see the rest'
-status: open
+status: done
 priority: high
 type: task
 created_at: 2026-09-01T22:28:17Z
-updated_at: 2026-09-01T22:28:17Z
+updated_at: 2026-09-03T22:02:43Z
 created_by: claude-code
 assignee: null
 depends_on: []
@@ -31,3 +31,7 @@ CONFIRMED via screenshot (fresh shell restart, so selectedTabKey was at its true
 NOT YET CONFIRMED (no click/scroll-simulation tool available in this environment -- no wlrctl/ydotool/wtype-with-scroll): whether the Flickable actually scrolls to reveal the remaining 41 rows at all. No scrollbar thumb was visible in a static screenshot, but that alone isn't proof of breakage -- ScrollBar.policy: AsNeeded auto-hides when not actively scrolling/hovering in many Qt styles, so its absence in a static shot is expected either way. This needs to be tested by an actual scroll gesture (the user scrolling for real, or finding/adding a way to simulate one) before concluding whether this is 'just fewer rows visible, scroll still works' (an annoying but working regression) or 'scroll itself is broken' (a more serious bug).
 
 Likely fix direction once confirmed: raise the height cap (Style.space(400) -> something larger) to restore more visible rows, and/or verify+fix the Flickable/ScrollBar wiring if scrolling itself turns out not to work.
+
+## Notes
+
+- 2026-09-03T22:02:43Z [claude-code] note: Fixed: restructured Panel.qml to mirror the shipped bluetooth panel's pattern instead of tailscale's. Root cause confirmed: wrapping the whole column (hero+tabs+separators+row list) in one Flickable capped at Style.space(400) meant the hero header added in task-fn8 ate into the same fixed budget as the row list, leaving only ~5 of 46 rows visible. Fix: hero/tabs/section header now sit directly in the panel's Column at natural height (panel.fittedContentHeight(column.implicitHeight), uncapped, bounded only by real screen space -- same as bluetooth/network); only the row list itself is now a ListView height-capped at Style.space(400) (~11 rows) and independently scrollable, with the delegate's width bound to ListView.view.width instead of parent.width. Confirmed via live restart + screenshot + a temporary onContentYChanged/onCountChanged debug log (removed before commit): contentY stays 0 on open (not pre-scrolled), the list opens showing the correct top of the sorted array (at-spi-dbus-bus first), and 11 full rows are now visible before the independently-scrollable list kicks in -- versus ~5 before, and better than the ~9 that were visible pre-hero-header. Scroll interactivity itself (interactive: contentHeight > height, ScrollBar AsNeeded) is unchanged from the already-shipped bluetooth/tailscale idiom, so it's presumed working the same way theirs does; still no click/scroll-simulation tool in this environment to physically drag it. Static gates clean: validate + qmllint both exit 0, automated suite 46/46 (unchanged, no Model.js changes), live restart shows no plugin errors in qs log.
