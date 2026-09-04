@@ -19,6 +19,14 @@ into tabs instead of one long flat list.
   know what they do. The toggle switches to whichever action makes sense
   for that unit's current state. Buttons disable while an action's running,
   and a failed action shows an error naming the unit and what went wrong.
+- A Logs button on every row toggles an inline panel with that unit's last
+  20 journal lines (`journalctl --user -u <unit> -n 20`), fetched on demand
+  — no need to open a terminal to see why something failed. Only one row's
+  logs are open at a time. Right-click it instead to open the unit's full
+  log in a real terminal (`journalctl --user -u <unit>`, pageable/searchable)
+  for when 20 lines isn't enough.
+
+  ![Logs button tooltip](docs/logs-tooltip.png)
 
 ![Bar icon](docs/bar-icon.png)
 
@@ -29,8 +37,8 @@ into tabs instead of one long flat list.
 - `systemctl --user` units only — no root/system-wide units, no privilege escalation.
 - Lists, categorizes, and controls (start/stop/restart) every unit, and
   flags failures. Only one action runs at a time across the panel.
-- No enable/disable (autostart toggle), no log tailing, no notifications,
-  no search/filter yet — see Roadmap.
+- No enable/disable (autostart toggle), no notifications, no search/filter
+  yet — see Roadmap.
 - Polling-based refresh (default every 10s, configurable 5–300s), not D-Bus signals.
 
 ## Configuration
@@ -190,7 +198,6 @@ for quick unit-parsing checks.
 ## Roadmap ideas
 
 - Enable/disable toggle (autostart) per unit.
-- Inline `journalctl --user -u <unit> -n 20` tail per row.
 - Notification (`notify-send`) when a unit transitions into `failed`.
 - Search/filter box, group headers, restart confirmation for active units.
 - Optional read-only view of system-wide (non-`--user`) units.

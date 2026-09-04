@@ -30,6 +30,15 @@ Item {
   property string _actionOutput: ""
   property string _actionError: ""
 
+  // Which unit's log panel is expanded, if any -- at most one at a time,
+  // mirroring pendingUnit's single-in-flight-action convention.
+  property string logUnit: ""
+  property string logText: ""
+  property bool logLoading: false
+  property string logError: ""
+  property string _logOutput: ""
+  property string _logError: ""
+
   function setting(name, fallback) {
     var value = settings ? settings[name] : undefined
     return value === undefined || value === null ? fallback : value
@@ -66,6 +75,30 @@ Item {
   function startUnit(name) { runAction("start", name) }
   function stopUnit(name) { runAction("stop", name) }
   function restartUnit(name) { runAction("restart", name) }
+
+  // A second click on the already-open row collapses it; clicking a
+  // different row's logs button switches straight to that unit.
+  function toggleLogs(name) {
+    if (logUnit === name) {
+      logUnit = ""
+      logText = ""
+      logError = ""
+      return
+    }
+    fetchLogs(name)
+  }
+
+  function fetchLogs(name) {
+    if (!name || logProcess.running) return
+    logUnit = name
+    logText = ""
+    logError = ""
+    _logOutput = ""
+    _logError = ""
+    logLoading = true
+    logProcess.command = ["journalctl", "--user", "-u", name, "-n", "20", "--no-pager", "--output=short-iso"]
+    logProcess.running = true
+  }
 
   function runAction(verb, name) {
     if (!name || actionProcess.running) return
@@ -131,6 +164,19 @@ Item {
       root.pendingUnit = ""
       root.pendingVerb = ""
       delayedRefresh.restart()
+    }
+  }
+
+  Process {
+    id: logProcess
+    running: false
+    command: []
+    stdout: StdioCollector { id: logStdout; waitForEnd: true; onStreamFinished: root._logOutput = text }
+    stderr: StdioCollector { id: logStderr; waitForEnd: true; onStreamFinished: root._logError = text }
+    onExited: function(exitCode) {
+      root.logLoading = false
+      if (exitCode === 0) root.logText = Model.formatJournalOutput(logStdout.text || root._logOutput)
+      else root.logError = (logStderr.text || root._logError || "journalctl failed").trim()
     }
   }
 

@@ -40,6 +40,17 @@ Panel {
     return Color.muted
   }
 
+  // The inline peek (20 lines, no pager) is fine for a quick glance, but
+  // scrolling/searching real history needs an actual pager -- so right-click
+  // hands off to a real terminal instead of trying to grow a scrollback of
+  // our own. execArgv (not execDetached) keeps the unit name out of any
+  // shell's tokenizing, matching the shipped plugins' convention for
+  // launching things built from row data rather than a fixed string.
+  function openLogsInTerminal(name) {
+    if (!name) return
+    Util.execArgv(["omarchy-launch-terminal", "journalctl", "--user", "-u", name])
+  }
+
   component TabButton: Button {
     required property var modelData
 
@@ -253,75 +264,116 @@ Panel {
 
           model: root.currentTab.units
 
-          delegate: Item {
+          delegate: Column {
             id: row
             required property var modelData
 
             readonly property var toggle: Model.toggleAction(modelData)
             readonly property bool busy: services.pendingUnit !== ""
             readonly property bool thisRowBusy: services.pendingUnit === modelData.name
+            readonly property bool logsOpen: services.logUnit === modelData.name
 
             width: ListView.view.width
-            height: Math.max(dot.height, nameText.implicitHeight, stateText.implicitHeight,
-                              toggleBtn.implicitHeight, restartBtn.implicitHeight,
-                              Style.spacing.popupRowHeight)
+            spacing: Style.spacing.xxs
 
-            Rectangle {
-              id: dot
-              width: Style.space(6)
-              height: Style.space(6)
-              radius: width / 2
-              anchors.left: parent.left
-              anchors.verticalCenter: parent.verticalCenter
-              color: root.rowColor(row.modelData)
+            Item {
+              id: header
+              width: parent.width
+              height: Math.max(dot.height, nameText.implicitHeight, stateText.implicitHeight,
+                                toggleBtn.implicitHeight, restartBtn.implicitHeight, logsBtn.implicitHeight,
+                                Style.spacing.popupRowHeight)
+
+              Rectangle {
+                id: dot
+                width: Style.space(6)
+                height: Style.space(6)
+                radius: width / 2
+                anchors.left: parent.left
+                anchors.verticalCenter: parent.verticalCenter
+                color: root.rowColor(row.modelData)
+              }
+
+              RowActionButton {
+                id: restartBtn
+                anchors.right: parent.right
+                anchors.verticalCenter: parent.verticalCenter
+                iconText: "↻"
+                tooltipText: row.thisRowBusy && services.pendingVerb === "restart" ? "Restarting…" : "Restart"
+                enabled: !row.busy
+                onClicked: services.restartUnit(row.modelData.name)
+              }
+
+              RowActionButton {
+                id: toggleBtn
+                anchors.right: restartBtn.left
+                anchors.rightMargin: Style.space(4)
+                anchors.verticalCenter: parent.verticalCenter
+                iconText: row.toggle.verb === "stop" ? "⏹" : "▶"
+                tooltipText: row.thisRowBusy ? row.toggle.label + "ing…" : row.toggle.label
+                enabled: !row.busy
+                onClicked: row.toggle.verb === "stop"
+                  ? services.stopUnit(row.modelData.name)
+                  : services.startUnit(row.modelData.name)
+              }
+
+              RowActionButton {
+                id: logsBtn
+                anchors.right: toggleBtn.left
+                anchors.rightMargin: Style.space(4)
+                anchors.verticalCenter: parent.verticalCenter
+                iconText: "▤"
+                tooltipText: (row.logsOpen ? "Hide logs" : "Logs") + " · right-click: open in terminal"
+                onClicked: services.toggleLogs(row.modelData.name)
+                onRightClicked: root.openLogsInTerminal(row.modelData.name)
+              }
+
+              Text {
+                id: stateText
+                anchors.right: logsBtn.left
+                anchors.rightMargin: Style.space(6)
+                anchors.verticalCenter: parent.verticalCenter
+                text: Model.stateLabel(row.modelData)
+                color: root.rowColor(row.modelData)
+                font.family: root.bar ? root.bar.fontFamily : Style.font.family
+                font.pixelSize: Style.font.bodySmall
+              }
+
+              Text {
+                id: nameText
+                anchors.left: dot.right
+                anchors.leftMargin: Style.space(6)
+                anchors.right: stateText.left
+                anchors.rightMargin: Style.space(6)
+                anchors.verticalCenter: parent.verticalCenter
+                elide: Text.ElideRight
+                text: row.modelData.shortName
+                color: root.rowColor(row.modelData)
+                font.family: root.bar ? root.bar.fontFamily : Style.font.family
+                font.pixelSize: Style.font.body
+              }
             }
 
-            RowActionButton {
-              id: restartBtn
-              anchors.right: parent.right
-              anchors.verticalCenter: parent.verticalCenter
-              iconText: "↻"
-              tooltipText: row.thisRowBusy && services.pendingVerb === "restart" ? "Restarting…" : "Restart"
-              enabled: !row.busy
-              onClicked: services.restartUnit(row.modelData.name)
-            }
-
-            RowActionButton {
-              id: toggleBtn
-              anchors.right: restartBtn.left
-              anchors.rightMargin: Style.space(4)
-              anchors.verticalCenter: parent.verticalCenter
-              iconText: row.toggle.verb === "stop" ? "⏹" : "▶"
-              tooltipText: row.thisRowBusy ? row.toggle.label + "ing…" : row.toggle.label
-              enabled: !row.busy
-              onClicked: row.toggle.verb === "stop"
-                ? services.stopUnit(row.modelData.name)
-                : services.startUnit(row.modelData.name)
-            }
-
+            // Recent journal lines for this row's unit, fetched on demand
+            // (task: journal tail) -- collapsed by default since 46 rows of
+            // pre-fetched logs would be both slow and unreadable.
             Text {
-              id: stateText
-              anchors.right: toggleBtn.left
-              anchors.rightMargin: Style.space(6)
-              anchors.verticalCenter: parent.verticalCenter
-              text: Model.stateLabel(row.modelData)
-              color: root.rowColor(row.modelData)
-              font.family: root.bar ? root.bar.fontFamily : Style.font.family
+              id: logText
+              // No manual height binding here (unlike the top-level error
+              // banners above): Column already excludes invisible children
+              // from layout, and inside this ListView delegate, binding
+              // height to implicitHeight caused a real binding-loop warning
+              // (height -> implicitHeight -> ListView repositioning ->
+              // height, discovered live via `qs log` against the real bar).
+              visible: row.logsOpen
+              width: parent.width
+              textFormat: Text.PlainText
+              wrapMode: Text.WordWrap
+              text: services.logLoading ? "Loading…"
+                : services.logError !== "" ? "Error: " + services.logError
+                : services.logText
+              color: services.logError !== "" ? Color.urgent : Color.muted
+              font.family: "monospace"
               font.pixelSize: Style.font.bodySmall
-            }
-
-            Text {
-              id: nameText
-              anchors.left: dot.right
-              anchors.leftMargin: Style.space(6)
-              anchors.right: stateText.left
-              anchors.rightMargin: Style.space(6)
-              anchors.verticalCenter: parent.verticalCenter
-              elide: Text.ElideRight
-              text: row.modelData.shortName
-              color: root.rowColor(row.modelData)
-              font.family: root.bar ? root.bar.fontFamily : Style.font.family
-              font.pixelSize: Style.font.body
             }
           }
         }

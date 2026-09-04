@@ -134,6 +134,14 @@ function actionErrorMessage(verb, unitName, detail) {
   return trimmed ? base + ": " + trimmed : base
 }
 
+// `journalctl` prints nothing (not even a trailing newline) for a unit with
+// no log entries yet, which would otherwise render as a blank panel row --
+// indistinguishable from "still loading".
+function formatJournalOutput(raw) {
+  var text = String(raw || "").trim()
+  return text === "" ? "No log entries" : text
+}
+
 // Hero header's live status line (task-fn8). Separate from badgeState:
 // the bar icon's tooltip is terse ("2 failed user services"), the hero
 // line has room to also say how many are healthy when nothing's wrong.
@@ -173,6 +181,7 @@ if (typeof module !== "undefined") {
     CATEGORY_KEYS: CATEGORY_KEYS,
     toggleAction: toggleAction,
     actionErrorMessage: actionErrorMessage,
+    formatJournalOutput: formatJournalOutput,
     heroStatus: heroStatus
   }
 }
