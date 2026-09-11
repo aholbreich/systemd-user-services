@@ -2,3 +2,4 @@ node_modules/
 .tl/.lock
 .claude/settings.local.json
 .pi/
+/AGENTS.md
