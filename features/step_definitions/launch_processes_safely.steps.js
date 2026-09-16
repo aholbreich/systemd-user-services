@@ -1,6 +1,6 @@
 const { Given, When, Then, After } = require("@cucumber/cucumber")
 const assert = require("node:assert/strict")
-const { spawnSync } = require("node:child_process")
+const { spawn, spawnSync } = require("node:child_process")
 const fs = require("node:fs")
 const os = require("node:os")
 const path = require("node:path")
@@ -22,9 +22,9 @@ function allCommands() {
   }
 }
 
-// Index of the real binary in the argv, right after the NAME=value pairs.
+// The real binary is whatever the innermost "setpriv --pdeathsig KILL" runs.
 function binaryOf(argv) {
-  return argv.slice(2).find(a => !a.includes("="))
+  return argv[argv.lastIndexOf("KILL") + 1]
 }
 
 Then("the list, action and journal commands all start with {string}", function(prefix) {
@@ -81,6 +81,109 @@ Then("the fake {string} never ran", function(_name) {
   assert.equal(fs.existsSync(this.marker), false)
 })
 
+Then("the {word} command is wrapped in {string}", function(which, wrapper) {
+  const argv = allCommands()[which]
+  const start = argv.indexOf("/usr/bin/timeout")
+  assert.ok(start > 0, "no /usr/bin/timeout in " + argv.join(" "))
+  assert.deepEqual(argv.slice(start, start + 3), wrapper.split(" "))
+})
+
+// Each hung test command writes the PIDs of its shell and background child
+// to a file, so the test can check afterwards that none of them survived.
+function hangingScript(pidFile, ignoreTerm) {
+  return (ignoreTerm ? "trap '' TERM; " : "") +
+    "/usr/bin/sleep 300 & echo $$ $! > '" + pidFile + "'; " +
+    "while :; do /usr/bin/sleep 1; done"
+}
+
+function givenHanging(world, seconds, ignoreTerm) {
+  world.tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "oma-systemd-hang-"))
+  world.pidFile = path.join(world.tmpDir, "pids")
+  world.argv = Model.boundedCommand(["/usr/bin/sh", "-c", hangingScript(world.pidFile, ignoreTerm)], currentSessionEnv(), seconds)
+}
+
+Given("a bounded {int}s command that starts a background child and then hangs", function(seconds) {
+  givenHanging(this, seconds, false)
+})
+
+Given("a bounded {int}s command that ignores TERM and hangs", function(seconds) {
+  givenHanging(this, seconds, true)
+})
+
+Given("a bounded {int}s command that hangs in place", function(seconds) {
+  this.tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "oma-systemd-hang-"))
+  this.pidFile = path.join(this.tmpDir, "pids")
+  const script = "echo $$ > '" + this.pidFile + "'; exec /usr/bin/sleep 300"
+  this.argv = Model.boundedCommand(["/usr/bin/sh", "-c", script], currentSessionEnv(), seconds)
+})
+
+When("it runs to completion", function() {
+  const started = Date.now()
+  this.run = spawnSync(this.argv[0], this.argv.slice(1), { encoding: "utf8", timeout: 20000 })
+  this.elapsedMs = Date.now() - started
+})
+
+Then("it exits with {int} within {int} seconds", function(code, seconds) {
+  assert.equal(this.run.status, code, this.run.stderr)
+  assert.ok(this.elapsedMs < seconds * 1000, "took " + this.elapsedMs + "ms")
+})
+
+Then("it is killed by KILL within {int} seconds", function(seconds) {
+  assert.equal(this.run.signal, "SIGKILL", "status " + this.run.status + ", stderr " + this.run.stderr)
+  assert.ok(this.elapsedMs < seconds * 1000, "took " + this.elapsedMs + "ms")
+})
+
+function waitFor(predicate, ms) {
+  const deadline = Date.now() + ms
+  return new Promise((resolve) => {
+    const tick = () => {
+      if (predicate() || Date.now() > deadline) return resolve(predicate())
+      setTimeout(tick, 50)
+    }
+    tick()
+  })
+}
+
+function alive(pid) {
+  try {
+    // Zombies still answer kill(0); only count processes that aren't reaped yet
+    // as dead if /proc says so.
+    const stat = fs.readFileSync("/proc/" + pid + "/stat", "utf8")
+    return !/^\d+ \(.*\) Z /.test(stat)
+  } catch (e) {
+    return false
+  }
+}
+
+When("it is started and the launched process gets {word}", async function(signal) {
+  this.child = spawn(this.argv[0], this.argv.slice(1), { stdio: "ignore" })
+  this.exited = new Promise(resolve => this.child.on("exit", () => resolve(Date.now())))
+  const ready = await waitFor(() => fs.existsSync(this.pidFile) && fs.readFileSync(this.pidFile, "utf8").trim() !== "", 3000)
+  assert.ok(ready, "hanging command never started")
+  this.signalledAt = Date.now()
+  this.child.kill("SIG" + signal)
+})
+
+Then("it exits within {int} seconds", async function(seconds) {
+  const exitedAt = await Promise.race([this.exited, new Promise(r => setTimeout(() => r(null), seconds * 1000))])
+  assert.ok(exitedAt, "still running after " + seconds + "s")
+})
+
+Then("none of its processes are still alive", async function() {
+  const pids = fs.readFileSync(this.pidFile, "utf8").trim().split(/\s+/).map(Number)
+  assert.ok(pids.length > 0)
+  const allGone = await waitFor(() => pids.every(pid => !alive(pid)), 3000)
+  assert.ok(allGone, "still alive: " + pids.filter(alive).join(", "))
+})
+
+Then("the error text for a {word} exit {int} with stderr {string} is {string}", function(kind, code, stderr, expected) {
+  const exitStatus = kind === "crash" ? 1 : 0
+  const text = Model.processErrorText(code, exitStatus, stderr.replace(/\\n/g, "\n"), "systemctl list-units failed", Model.TIMEOUT_SEC.list)
+  assert.equal(text, expected)
+})
+
 After(function() {
+  if (this.child && this.child.exitCode === null) this.child.kill("SIGKILL")
   if (this.fakeDir) fs.rmSync(this.fakeDir, { recursive: true, force: true })
+  if (this.tmpDir) fs.rmSync(this.tmpDir, { recursive: true, force: true })
 })

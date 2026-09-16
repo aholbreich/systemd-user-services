@@ -21,3 +21,43 @@ Feature: Launch systemctl and journalctl without trusting the shell's environmen
     When the list command runs with that PATH
     Then it succeeds with real systemctl JSON output
     And the fake "systemctl" never ran
+
+  @automated
+  Scenario: Every command has a hard timeout with a KILL fallback
+    Then the list command is wrapped in "/usr/bin/timeout --kill-after=2s 10s"
+    And the action command is wrapped in "/usr/bin/timeout --kill-after=2s 30s"
+    And the journal command is wrapped in "/usr/bin/timeout --kill-after=2s 10s"
+
+  @automated
+  Scenario: A hung command and everything it started are terminated at the deadline
+    Given a bounded 1s command that starts a background child and then hangs
+    When it runs to completion
+    Then it exits with 124 within 3 seconds
+    And none of its processes are still alive
+
+  @automated
+  Scenario: A command that ignores TERM is killed after the grace period
+    Given a bounded 1s command that ignores TERM and hangs
+    When it runs to completion
+    Then it is killed by KILL within 5 seconds
+    And none of its processes are still alive
+
+  @automated
+  Scenario: Stopping the process from the shell cleans up the whole tree
+    Given a bounded 30s command that starts a background child and then hangs
+    When it is started and the launched process gets TERM
+    Then it exits within 3 seconds
+    And none of its processes are still alive
+
+  @automated
+  Scenario: The command doesn't survive if the timeout process is SIGKILLed
+    Given a bounded 30s command that hangs in place
+    When it is started and the launched process gets KILL
+    Then none of its processes are still alive
+
+  @automated
+  Scenario: A timeout is reported as a timeout, not as an empty error
+    Then the error text for a normal exit 124 with stderr "" is "systemctl list-units failed (timed out after 10s)"
+    And the error text for a crash exit 9 with stderr "" is "systemctl list-units failed (timed out after 10s)"
+    And the error text for a normal exit 1 with stderr "Unit x not found.\n" is "Unit x not found."
+    And the error text for a normal exit 1 with stderr "" is "systemctl list-units failed"

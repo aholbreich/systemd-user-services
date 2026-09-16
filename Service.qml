@@ -66,7 +66,6 @@ Item {
     refreshing = true
     listProcess.command = Model.listUnitsCommand(sessionEnv)
     listProcess.running = true
-    if (!pollWatchdog.running) pollWatchdog.start()
   }
 
   function applyUnits(raw) {
@@ -129,15 +128,6 @@ Item {
   }
 
   Timer {
-    // A hung systemctl (rare, but rather safe than a permanently stale badge)
-    // shouldn't stop future polls from ever firing again.
-    id: pollWatchdog
-    interval: 15000
-    repeat: false
-    onTriggered: if (listProcess.running) listProcess.running = false
-  }
-
-  Timer {
     // Give systemd a beat to settle before re-polling, rather than racing
     // the refresh against the action's own state transition.
     id: delayedRefresh
@@ -163,9 +153,11 @@ Item {
     command: []
     stdout: StdioCollector { id: actionStdout; waitForEnd: true; onStreamFinished: root._actionOutput = text }
     stderr: StdioCollector { id: actionStderr; waitForEnd: true; onStreamFinished: root._actionError = text }
-    onExited: function(exitCode) {
-      if (exitCode !== 0) {
-        var detail = actionStderr.text || root._actionError || actionStdout.text || root._actionOutput
+    onExited: function(exitCode, exitStatus) {
+      if (exitCode !== 0 || exitStatus !== 0) {
+        var detail = Model.timedOut(exitCode, exitStatus)
+          ? "timed out after " + Model.TIMEOUT_SEC.action + "s"
+          : actionStderr.text || root._actionError || actionStdout.text || root._actionOutput
         root.lastActionError = Model.actionErrorMessage(root.pendingVerb, root.pendingUnit, detail)
         actionErrorTimer.restart()
       }
@@ -181,10 +173,10 @@ Item {
     command: []
     stdout: StdioCollector { id: logStdout; waitForEnd: true; onStreamFinished: root._logOutput = text }
     stderr: StdioCollector { id: logStderr; waitForEnd: true; onStreamFinished: root._logError = text }
-    onExited: function(exitCode) {
+    onExited: function(exitCode, exitStatus) {
       root.logLoading = false
-      if (exitCode === 0) root.logText = Model.formatJournalOutput(logStdout.text || root._logOutput)
-      else root.logError = (logStderr.text || root._logError || "journalctl failed").trim()
+      if (exitCode === 0 && exitStatus === 0) root.logText = Model.formatJournalOutput(logStdout.text || root._logOutput)
+      else root.logError = Model.processErrorText(exitCode, exitStatus, logStderr.text || root._logError, "journalctl failed", Model.TIMEOUT_SEC.journal)
     }
   }
 
@@ -202,10 +194,10 @@ Item {
       waitForEnd: true
       onStreamFinished: root._listError = text
     }
-    onExited: function(exitCode) {
+    onExited: function(exitCode, exitStatus) {
       root.refreshing = false
-      if (exitCode === 0) root.applyUnits(listStdout.text || root._listOutput)
-      else root.lastError = (listStderr.text || root._listError || "systemctl list-units failed").trim()
+      if (exitCode === 0 && exitStatus === 0) root.applyUnits(listStdout.text || root._listOutput)
+      else root.lastError = Model.processErrorText(exitCode, exitStatus, listStderr.text || root._listError, "systemctl list-units failed", Model.TIMEOUT_SEC.list)
     }
   }
 }

@@ -187,25 +187,59 @@ function minimalEnvironment(sessionEnv) {
   return vars
 }
 
-function processCommand(tool, args, sessionEnv) {
-  var binary = TRUSTED_BINARIES[tool]
-  if (!binary) throw new Error("Unknown tool: " + tool)
+// Hard deadlines per process. /usr/bin/timeout runs the command in its own
+// process group and signals the whole group: TERM at the deadline (or as
+// soon as timeout itself gets TERM, which is what Quickshell sends when a
+// Process is stopped), then KILL KILL_AFTER_SEC later if anything is still
+// alive. timeout waits for its child, and Quickshell reaps timeout.
+//
+// If timeout itself is SIGKILLed (it can't forward that), the parent-death
+// signals set with setpriv take over: timeout gets TERM if the shell goes
+// away, and the command gets KILL if timeout goes away, so nothing outlives
+// the process that started it.
+var TIMEOUT_SEC = { list: 10, action: 30, journal: 10 }
+var KILL_AFTER_SEC = 2
+
+// /usr/bin/timeout exits 124 when TERM was enough. When it has to fall back
+// to KILL it re-raises KILL on itself, which Quickshell reports as a crash
+// exit with exitCode 9 (a shell would show 137).
+var CRASH_EXIT = 1
+
+function timedOut(exitCode, exitStatus) {
+  return exitCode === 124 || exitCode === 137 || (exitStatus === CRASH_EXIT && exitCode === 9)
+}
+
+function processErrorText(exitCode, exitStatus, stderrText, fallback, timeoutSec) {
+  if (timedOut(exitCode, exitStatus)) return fallback + " (timed out after " + timeoutSec + "s)"
+  var trimmed = String(stderrText || "").trim()
+  return trimmed || fallback
+}
+
+function boundedCommand(argv, sessionEnv, timeoutSec) {
   return ["/usr/bin/env", "-i"]
     .concat(minimalEnvironment(sessionEnv))
-    .concat([binary])
-    .concat(args)
+    .concat(["/usr/bin/setpriv", "--pdeathsig", "TERM"])
+    .concat(["/usr/bin/timeout", "--kill-after=" + KILL_AFTER_SEC + "s", timeoutSec + "s"])
+    .concat(["/usr/bin/setpriv", "--pdeathsig", "KILL"])
+    .concat(argv)
+}
+
+function processCommand(tool, args, sessionEnv, timeoutSec) {
+  var binary = TRUSTED_BINARIES[tool]
+  if (!binary) throw new Error("Unknown tool: " + tool)
+  return boundedCommand([binary].concat(args), sessionEnv, timeoutSec)
 }
 
 function listUnitsCommand(sessionEnv) {
-  return processCommand("systemctl", ["--user", "list-units", "--type=service", "--all", "--output=json"], sessionEnv)
+  return processCommand("systemctl", ["--user", "list-units", "--type=service", "--all", "--output=json"], sessionEnv, TIMEOUT_SEC.list)
 }
 
 function actionCommand(verb, unitName, sessionEnv) {
-  return processCommand("systemctl", ["--user", verb, unitName], sessionEnv)
+  return processCommand("systemctl", ["--user", verb, unitName], sessionEnv, TIMEOUT_SEC.action)
 }
 
 function journalCommand(unitName, sessionEnv) {
-  return processCommand("journalctl", ["--user", "-u", unitName, "-n", "20", "--no-pager", "--output=short-iso"], sessionEnv)
+  return processCommand("journalctl", ["--user", "-u", unitName, "-n", "20", "--no-pager", "--output=short-iso"], sessionEnv, TIMEOUT_SEC.journal)
 }
 
 if (typeof module !== "undefined") {
@@ -228,6 +262,11 @@ if (typeof module !== "undefined") {
     heroStatus: heroStatus,
     TRUSTED_BINARIES: TRUSTED_BINARIES,
     minimalEnvironment: minimalEnvironment,
+    TIMEOUT_SEC: TIMEOUT_SEC,
+    KILL_AFTER_SEC: KILL_AFTER_SEC,
+    timedOut: timedOut,
+    processErrorText: processErrorText,
+    boundedCommand: boundedCommand,
     processCommand: processCommand,
     listUnitsCommand: listUnitsCommand,
     actionCommand: actionCommand,

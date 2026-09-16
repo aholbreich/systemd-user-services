@@ -20,6 +20,6 @@ Feature: Service polls systemctl and exposes live unit state
   @manual
   Scenario: A hung systemctl call does not permanently freeze the badge
     Given a refresh is in flight
-    When that refresh process does not exit within the watchdog window
-    Then the watchdog kills the stuck process
+    When that refresh process does not exit within 10 seconds
+    Then /usr/bin/timeout terminates it and the panel shows "systemctl list-units failed (timed out after 10s)"
     And the next scheduled refresh still runs
