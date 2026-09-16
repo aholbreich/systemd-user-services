@@ -202,6 +202,32 @@ function enablementState(unitName, states) {
   return ""
 }
 
+// list-units only returns units systemd currently has loaded. A stopped unit
+// that nothing references gets unloaded, so disabling a stopped service used
+// to make its row disappear (and with it the way to enable it again).
+// Installed services that can be enabled or disabled are added as inactive
+// rows so they are always listed. Templates ("foo@.service") are skipped;
+// they can't be started without an instance name.
+function mergeInstalledUnits(loadedUnits, states) {
+  var units = (loadedUnits || []).slice()
+  var seen = {}
+  units.forEach(function(u) { seen[u.name] = true })
+  Object.keys(states || {}).forEach(function(name) {
+    var state = states[name]
+    if (state !== "enabled" && state !== "disabled") return
+    if (seen[name] || name.indexOf("@.") !== -1) return
+    units.push({
+      name: name,
+      shortName: shortName(name),
+      load: "not-loaded",
+      activeState: "inactive",
+      subState: "dead",
+      description: ""
+    })
+  })
+  return sortUnits(units)
+}
+
 // For a user unit "enabled" means it's pulled in when the user session
 // starts (login), not at machine boot. Only enabled/disabled can be flipped
 // with enable/disable; everything else is started some other way, so the row
@@ -386,6 +412,7 @@ if (typeof module !== "undefined") {
     listUnitFilesCommand: listUnitFilesCommand,
     parseUnitFiles: parseUnitFiles,
     enablementState: enablementState,
+    mergeInstalledUnits: mergeInstalledUnits,
     autostartAction: autostartAction,
     actionCommand: actionCommand,
     journalCommand: journalCommand

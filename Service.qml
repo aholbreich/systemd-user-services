@@ -22,6 +22,7 @@ Item {
   // from a second poll alongside list-units. Kept separate from `units` so a
   // failure here only hides the autostart toggles, not the whole list.
   property var unitFileStates: ({})
+  property var _loadedUnits: []
   property string unitFilesError: ""
 
   readonly property int refreshIntervalSec: intSetting("refreshIntervalSec", 10, 5, 300)
@@ -91,9 +92,16 @@ Item {
       lastError = parsed.error
       return
     }
-    units = parsed.units
-    failedCount = Model.countFailed(parsed.units)
+    _loadedUnits = parsed.units
+    mergeUnits()
     lastError = ""
+  }
+
+  // Loaded units plus installed-but-unloaded ones; rerun whenever either
+  // poll brings new data.
+  function mergeUnits() {
+    units = Model.mergeInstalledUnits(_loadedUnits, unitFileStates)
+    failedCount = Model.countFailed(units)
   }
 
   function startUnit(name) { runAction("start", name) }
@@ -110,6 +118,7 @@ Item {
     }
     unitFileStates = parsed.states
     unitFilesError = ""
+    mergeUnits()
   }
 
   // A second click on the already-open row collapses it; clicking a

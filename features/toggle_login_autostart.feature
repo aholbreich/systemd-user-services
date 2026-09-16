@@ -51,6 +51,28 @@ Feature: See and toggle whether a user service starts at login
     Then parsing the unit files fails
 
   @automated
+  Scenario: Installed services that systemd has unloaded are still listed
+    Given the raw list-unit-files JSON:
+      """
+      [{"unit_file":"loaded.service","state":"enabled","preset":null},
+       {"unit_file":"ibgateway.service","state":"disabled","preset":null},
+       {"unit_file":"hyprsunset.service","state":"enabled","preset":null},
+       {"unit_file":"dconf.service","state":"static","preset":null},
+       {"unit_file":"wireplumber@.service","state":"disabled","preset":null}]
+      """
+    When the unit files are parsed
+    And they are merged with the loaded unit "loaded.service" in state "active"
+    Then the merged list is "loaded, hyprsunset, ibgateway"
+    And "ibgateway.service" is listed as "inactive (dead)"
+
+  @automated
+  Scenario: Disabling a stopped service keeps it in the plugin's list
+    Given a disposable unit with an [Install] section wanted by "default.target"
+    When the plugin runs "enable" on it
+    And the plugin runs "disable" on it
+    Then the plugin's merged unit list still contains it
+
+  @automated
   Scenario Outline: Only enabled and disabled units get a toggle
     Then the autostart action for state "<state>" is toggleable "<toggleable>" with verb "<verb>" and on "<on>"
 

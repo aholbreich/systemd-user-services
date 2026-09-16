@@ -92,6 +92,29 @@ Then("it is still {string}", function(expected) {
   assert.equal(state, expected)
 })
 
+When("they are merged with the loaded unit {string} in state {string}", function(name, state) {
+  const loaded = [{ name, shortName: Model.shortName(name), load: "loaded", activeState: state, subState: "running", description: "" }]
+  this.merged = Model.mergeInstalledUnits(loaded, this.unitFiles.states)
+})
+
+Then("the merged list is {string}", function(expected) {
+  assert.equal(this.merged.map(u => u.shortName).join(", "), expected)
+})
+
+Then("{string} is listed as {string}", function(name, label) {
+  const unit = this.merged.find(u => u.name === name)
+  assert.ok(unit, name + " missing")
+  assert.equal(Model.stateLabel(unit), label)
+})
+
+Then("the plugin's merged unit list still contains it", function() {
+  const list = runArgv(Model.listUnitsCommand(sessionEnv()))
+  const files = runArgv(Model.listUnitFilesCommand(sessionEnv()))
+  const units = Model.parseUnits(list.stdout).units
+  const merged = Model.mergeInstalledUnits(units, Model.parseUnitFiles(files.stdout).states)
+  assert.ok(merged.some(u => u.name === this.autostartUnit), "row for " + this.autostartUnit + " is gone")
+})
+
 After(function() {
   if (!this.autostartUnit) return
   try { execFileSync("systemctl", ["--user", "disable", this.autostartUnit], { stdio: "ignore" }) } catch (e) {}
