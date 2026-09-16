@@ -165,6 +165,75 @@ function badgeState(failedCount) {
   }
 }
 
+// `systemctl --user list-unit-files --output=json` gives the enablement state
+// per unit file ("enabled", "disabled", "static", ...). list-units doesn't
+// carry it, so the two lists are fetched separately and joined by name.
+function parseUnitFiles(raw) {
+  var text = String(raw || "").trim()
+  if (text === "") return { ok: true, states: {} }
+
+  try {
+    var parsed = JSON.parse(text)
+  } catch (e) {
+    return { ok: false, error: "Could not parse systemctl unit files: " + e.message }
+  }
+
+  if (!Array.isArray(parsed)) return { ok: false, error: "Unexpected systemctl unit file output shape" }
+
+  var states = {}
+  parsed.forEach(function(entry) {
+    var name = String(entry.unit_file || "")
+    if (name !== "") states[name] = String(entry.state || "")
+  })
+  return { ok: true, states: states }
+}
+
+// Instances like "foo@1.service" have no unit file of their own; their
+// enablement comes from the template "foo@.service".
+function enablementState(unitName, states) {
+  if (!states || !unitName) return ""
+  if (states[unitName] !== undefined) return states[unitName]
+  var at = unitName.indexOf("@")
+  if (at > 0) {
+    var dot = unitName.lastIndexOf(".")
+    var template = unitName.slice(0, at + 1) + (dot > at ? unitName.slice(dot) : "")
+    if (states[template] !== undefined) return states[template]
+  }
+  return ""
+}
+
+// For a user unit "enabled" means it's pulled in when the user session
+// starts (login), not at machine boot. Only enabled/disabled can be flipped
+// with enable/disable; everything else is started some other way, so the row
+// explains that instead of offering a toggle. Deliberately no --now: Start
+// and Stop stay the only buttons that change whether it's running.
+var ENABLEMENT_EXPLANATIONS = {
+  "static": "No autostart setting: started by another unit, socket or D-Bus",
+  "indirect": "No autostart setting: enabled through another unit",
+  "generated": "No autostart setting: generated (e.g. from an XDG autostart entry)",
+  "transient": "No autostart setting: transient unit created at runtime",
+  "alias": "No autostart setting: this name is an alias",
+  "masked": "Masked: can't be started until unmasked",
+  "linked": "Linked unit file",
+  "enabled-runtime": "Starts at login until next reboot (enabled at runtime)"
+}
+
+function autostartAction(state) {
+  if (state === "enabled") {
+    return { toggleable: true, on: true, verb: "disable", label: "Starts at login · click to disable" }
+  }
+  if (state === "disabled") {
+    return { toggleable: true, on: false, verb: "enable", label: "Doesn't start at login · click to enable" }
+  }
+  var explanation = ENABLEMENT_EXPLANATIONS[state]
+  return {
+    toggleable: false,
+    on: state === "enabled-runtime",
+    verb: "",
+    label: explanation || (state ? "Autostart: " + state : "Autostart state unknown")
+  }
+}
+
 // Every process the plugin launches is built here, never inline in QML.
 // Binaries are pinned to their packaged paths and the environment is
 // rebuilt from scratch, so a writable directory early in the shell's PATH
@@ -274,6 +343,10 @@ function listUnitsCommand(sessionEnv) {
   return processCommand("systemctl", ["--user", "list-units", "--type=service", "--all", "--output=json"], sessionEnv, "list")
 }
 
+function listUnitFilesCommand(sessionEnv) {
+  return processCommand("systemctl", ["--user", "list-unit-files", "--type=service", "--output=json"], sessionEnv, "list")
+}
+
 function actionCommand(verb, unitName, sessionEnv) {
   return processCommand("systemctl", ["--user", verb, unitName], sessionEnv, "action")
 }
@@ -310,6 +383,10 @@ if (typeof module !== "undefined") {
     boundedCommand: boundedCommand,
     processCommand: processCommand,
     listUnitsCommand: listUnitsCommand,
+    listUnitFilesCommand: listUnitFilesCommand,
+    parseUnitFiles: parseUnitFiles,
+    enablementState: enablementState,
+    autostartAction: autostartAction,
     actionCommand: actionCommand,
     journalCommand: journalCommand
   }

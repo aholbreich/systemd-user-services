@@ -18,6 +18,12 @@ Item {
   // every action was clearing it in under half a second.
   property string lastActionError: ""
 
+  // Unit file name -> enablement state ("enabled", "disabled", "static", ...),
+  // from a second poll alongside list-units. Kept separate from `units` so a
+  // failure here only hides the autostart toggles, not the whole list.
+  property var unitFileStates: ({})
+  property string unitFilesError: ""
+
   readonly property int refreshIntervalSec: intSetting("refreshIntervalSec", 10, 5, 300)
 
   // Unit currently mid-action, so the row can disable its buttons instead
@@ -27,6 +33,8 @@ Item {
 
   property string _listOutput: ""
   property string _listError: ""
+  property string _unitFilesOutput: ""
+  property string _unitFilesError: ""
   property string _actionOutput: ""
   property string _actionError: ""
 
@@ -66,6 +74,15 @@ Item {
     refreshing = true
     listProcess.command = Model.listUnitsCommand(sessionEnv)
     listProcess.running = true
+    refreshUnitFiles()
+  }
+
+  function refreshUnitFiles() {
+    if (unitFilesProcess.running) return
+    _unitFilesOutput = ""
+    _unitFilesError = ""
+    unitFilesProcess.command = Model.listUnitFilesCommand(sessionEnv)
+    unitFilesProcess.running = true
   }
 
   function applyUnits(raw) {
@@ -82,6 +99,18 @@ Item {
   function startUnit(name) { runAction("start", name) }
   function stopUnit(name) { runAction("stop", name) }
   function restartUnit(name) { runAction("restart", name) }
+  function enableUnit(name) { runAction("enable", name) }
+  function disableUnit(name) { runAction("disable", name) }
+
+  function applyUnitFiles(raw) {
+    var parsed = Model.parseUnitFiles(raw)
+    if (!parsed.ok) {
+      unitFilesError = parsed.error
+      return
+    }
+    unitFileStates = parsed.states
+    unitFilesError = ""
+  }
 
   // A second click on the already-open row collapses it; clicking a
   // different row's logs button switches straight to that unit.
@@ -177,6 +206,18 @@ Item {
       root.logLoading = false
       if (exitCode === 0 && exitStatus === 0) root.logText = Model.formatJournalOutput(logStdout.text || root._logOutput)
       else root.logError = Model.processErrorText(exitCode, exitStatus, logStderr.text || root._logError, "journalctl failed", Model.TIMEOUT_SEC.journal)
+    }
+  }
+
+  Process {
+    id: unitFilesProcess
+    running: false
+    command: []
+    stdout: StdioCollector { id: unitFilesStdout; waitForEnd: true; onStreamFinished: root._unitFilesOutput = text }
+    stderr: StdioCollector { id: unitFilesStderr; waitForEnd: true; onStreamFinished: root._unitFilesError = text }
+    onExited: function(exitCode, exitStatus) {
+      if (exitCode === 0 && exitStatus === 0) root.applyUnitFiles(unitFilesStdout.text || root._unitFilesOutput)
+      else root.unitFilesError = Model.processErrorText(exitCode, exitStatus, unitFilesStderr.text || root._unitFilesError, "systemctl list-unit-files failed", Model.TIMEOUT_SEC.list)
     }
   }
 

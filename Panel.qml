@@ -274,6 +274,7 @@ Panel {
             readonly property bool busy: services.pendingUnit !== ""
             readonly property bool thisRowBusy: services.pendingUnit === modelData.name
             readonly property bool logsOpen: services.logUnit === modelData.name
+            readonly property var autostart: Model.autostartAction(Model.enablementState(modelData.name, services.unitFileStates))
 
             width: ListView.view.width
             spacing: Style.spacing.xxs
@@ -282,7 +283,7 @@ Panel {
               id: header
               width: parent.width
               height: Math.max(dot.height, nameText.implicitHeight, stateText.implicitHeight,
-                                toggleBtn.implicitHeight, restartBtn.implicitHeight, logsBtn.implicitHeight,
+                                toggleBtn.implicitHeight, restartBtn.implicitHeight, logsBtn.implicitHeight, autostartBtn.implicitHeight,
                                 Style.spacing.popupRowHeight)
 
               Rectangle {
@@ -311,7 +312,7 @@ Panel {
                 anchors.rightMargin: Style.space(4)
                 anchors.verticalCenter: parent.verticalCenter
                 iconText: row.toggle.verb === "stop" ? "⏹" : "▶"
-                tooltipText: row.thisRowBusy ? row.toggle.label + "ing…" : row.toggle.label
+                tooltipText: row.thisRowBusy && services.pendingVerb === row.toggle.verb ? row.toggle.label + "ing…" : row.toggle.label
                 enabled: !row.busy
                 onClicked: row.toggle.verb === "stop"
                   ? services.stopUnit(row.modelData.name)
@@ -329,9 +330,34 @@ Panel {
                 onRightClicked: root.openLogsInTerminal(row.modelData.name)
               }
 
+              // Login autostart (task-xja). Only enabled/disabled units get a
+              // working toggle; for static/generated/transient units the same
+              // slot shows a muted dot so the columns stay aligned and the
+              // tooltip says why there's nothing to switch.
+              RowActionButton {
+                id: autostartBtn
+                anchors.right: logsBtn.left
+                anchors.rightMargin: Style.space(4)
+                anchors.verticalCenter: parent.verticalCenter
+                bordered: row.autostart.toggleable
+                selected: row.autostart.on
+                iconText: row.autostart.toggleable ? "⏻" : "·"
+                foreground: row.autostart.toggleable ? root.barForeground : Color.muted
+                tooltipText: services.unitFilesError !== "" ? "Autostart state unavailable: " + services.unitFilesError
+                  : row.thisRowBusy && services.pendingVerb === row.autostart.verb
+                    ? (row.autostart.verb === "enable" ? "Enabling…" : "Disabling…")
+                    : row.autostart.label
+                enabled: !row.busy
+                onClicked: {
+                  if (!row.autostart.toggleable) return
+                  if (row.autostart.verb === "enable") services.enableUnit(row.modelData.name)
+                  else services.disableUnit(row.modelData.name)
+                }
+              }
+
               Text {
                 id: stateText
-                anchors.right: logsBtn.left
+                anchors.right: autostartBtn.left
                 anchors.rightMargin: Style.space(6)
                 anchors.verticalCenter: parent.verticalCenter
                 text: Model.stateLabel(row.modelData)
