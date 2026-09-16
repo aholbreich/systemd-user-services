@@ -9,7 +9,8 @@ into tabs instead of one long flat list.
   ("46 services, all healthy", turning red the moment something fails),
   same style as Omarchy's own network/bluetooth panels.
 - Below that, every user service, failed ones first, then running, then
-  the rest, each with a colored state dot — and that same color runs
+  the rest. Installed services that systemd hasn't loaded right now (for
+  example a stopped, disabled one) are listed too, as inactive, each with a colored state dot — and that same color runs
   through the name and state label too, so a failed row is unmistakable
   at a glance.
 - Services are grouped into tabs by what they actually are (Audio, Security,
@@ -27,6 +28,12 @@ into tabs instead of one long flat list.
   for when 20 lines isn't enough.
 
   ![Logs button tooltip](docs/logs-tooltip.png)
+- A power button on every row shows whether the service starts at login:
+  bright if it's enabled, muted if not. Clicking it runs
+  `systemctl --user enable` or `disable`. It doesn't start or stop anything;
+  Start/Stop does that. Services that are started some other way (static,
+  generated, transient, ...) show a muted dot, and the tooltip says why
+  there's nothing to switch.
 
 ![Bar icon](docs/bar-icon.png)
 
@@ -35,11 +42,28 @@ into tabs instead of one long flat list.
 ## Scope (MVP)
 
 - `systemctl --user` units only — no root/system-wide units, no privilege escalation.
-- Lists, categorizes, and controls (start/stop/restart) every unit, and
-  flags failures. Only one action runs at a time across the panel.
-- No enable/disable (autostart toggle), no notifications, no search/filter
-  yet — see Roadmap.
+- Lists, categorizes, and controls (start/stop/restart, enable/disable) every
+  unit, and flags failures. Only one action runs at a time across the panel.
+- No notifications, no search/filter yet — see Roadmap.
 - Polling-based refresh (default every 10s, configurable 5–300s), not D-Bus signals.
+
+## How commands are run
+
+The plugin only runs `/usr/bin/systemctl --user` (list-units, list-unit-files,
+start, stop, restart, enable, disable) and `/usr/bin/journalctl --user`. All
+command lines are built in `Model.js`, and each one runs:
+
+- by absolute path, under `/usr/bin/env -i` with only `PATH=/usr/bin`, `LANG`,
+  `XDG_RUNTIME_DIR` and `DBUS_SESSION_BUS_ADDRESS`, so nothing on the shell's
+  `PATH` can stand in for systemctl;
+- under `/usr/bin/timeout --kill-after=2s` (10s for list/journal, 30s for
+  actions), which sends TERM to the whole process group and KILL after 2s.
+  `setpriv --pdeathsig` makes sure the command doesn't outlive timeout;
+- with stdout and stderr capped by `head -c` in the process tree (1 MiB unit
+  list, 256 KiB journal, 64 KiB actions and stderr). Going over the stdout
+  cap is an error, not truncated output.
+
+`features/launch_processes_safely.feature` tests this against real processes.
 
 ## Configuration
 
@@ -197,7 +221,6 @@ for quick unit-parsing checks.
 
 ## Roadmap ideas
 
-- Enable/disable toggle (autostart) per unit.
 - Notification (`notify-send`) when a unit transitions into `failed`.
 - Search/filter box, group headers, restart confirmation for active units.
 - Optional read-only view of system-wide (non-`--user`) units.
