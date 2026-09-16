@@ -110,10 +110,10 @@ Feature: See and toggle whether a user service starts at login
   @manual
   Scenario: The autostart button reflects and flips the state
     Given the "pipewire-pulse" row shows an enabled unit
-    Then its power button is highlighted with tooltip "Starts at login · click to disable"
+    Then its power button is drawn in the normal text color with tooltip "Starts at login · click to disable"
     When I click the power button
     Then the tooltip reads "Disabling…" until the command finishes
-    And after the refresh the button is no longer highlighted
+    And after the refresh the button is muted, even while the mouse is still over it
     And the service is still running
 
   @manual

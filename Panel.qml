@@ -334,15 +334,20 @@ Panel {
               // working toggle; for static/generated/transient units the same
               // slot shows a muted dot so the columns stay aligned and the
               // tooltip says why there's nothing to switch.
+              //
+              // On/off is carried by the icon color, not `selected`: Button
+              // paints hover over selected, so right after a click (mouse
+              // still on the button) the two states looked identical and the
+              // click seemed to do nothing -- found live, a second click then
+              // switched it straight back.
               RowActionButton {
                 id: autostartBtn
                 anchors.right: logsBtn.left
                 anchors.rightMargin: Style.space(4)
                 anchors.verticalCenter: parent.verticalCenter
                 bordered: row.autostart.toggleable
-                selected: row.autostart.on
                 iconText: row.autostart.toggleable ? "⏻" : "·"
-                foreground: row.autostart.toggleable ? root.barForeground : Color.muted
+                foreground: row.autostart.on ? root.barForeground : Color.muted
                 tooltipText: services.unitFilesError !== "" ? "Autostart state unavailable: " + services.unitFilesError
                   : row.thisRowBusy && services.pendingVerb === row.autostart.verb
                     ? (row.autostart.verb === "enable" ? "Enabling…" : "Disabling…")
