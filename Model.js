@@ -165,6 +165,49 @@ function badgeState(failedCount) {
   }
 }
 
+// Every process the plugin launches is built here, never inline in QML.
+// Binaries are pinned to their packaged paths and the environment is
+// rebuilt from scratch, so a writable directory early in the shell's PATH
+// can't swap in a different "systemctl".
+var TRUSTED_BINARIES = {
+  systemctl: "/usr/bin/systemctl",
+  journalctl: "/usr/bin/journalctl"
+}
+
+// systemctl --user needs the session's runtime dir/bus to find the user
+// manager; nothing else is passed through.
+var PASSED_ENV_KEYS = ["XDG_RUNTIME_DIR", "DBUS_SESSION_BUS_ADDRESS"]
+
+function minimalEnvironment(sessionEnv) {
+  var vars = ["PATH=/usr/bin", "LANG=C.UTF-8"]
+  PASSED_ENV_KEYS.forEach(function(key) {
+    var value = sessionEnv ? sessionEnv[key] : undefined
+    if (value !== undefined && value !== null && String(value) !== "") vars.push(key + "=" + String(value))
+  })
+  return vars
+}
+
+function processCommand(tool, args, sessionEnv) {
+  var binary = TRUSTED_BINARIES[tool]
+  if (!binary) throw new Error("Unknown tool: " + tool)
+  return ["/usr/bin/env", "-i"]
+    .concat(minimalEnvironment(sessionEnv))
+    .concat([binary])
+    .concat(args)
+}
+
+function listUnitsCommand(sessionEnv) {
+  return processCommand("systemctl", ["--user", "list-units", "--type=service", "--all", "--output=json"], sessionEnv)
+}
+
+function actionCommand(verb, unitName, sessionEnv) {
+  return processCommand("systemctl", ["--user", verb, unitName], sessionEnv)
+}
+
+function journalCommand(unitName, sessionEnv) {
+  return processCommand("journalctl", ["--user", "-u", unitName, "-n", "20", "--no-pager", "--output=short-iso"], sessionEnv)
+}
+
 if (typeof module !== "undefined") {
   module.exports = {
     parseUnits: parseUnits,
@@ -182,6 +225,12 @@ if (typeof module !== "undefined") {
     toggleAction: toggleAction,
     actionErrorMessage: actionErrorMessage,
     formatJournalOutput: formatJournalOutput,
-    heroStatus: heroStatus
+    heroStatus: heroStatus,
+    TRUSTED_BINARIES: TRUSTED_BINARIES,
+    minimalEnvironment: minimalEnvironment,
+    processCommand: processCommand,
+    listUnitsCommand: listUnitsCommand,
+    actionCommand: actionCommand,
+    journalCommand: journalCommand
   }
 }

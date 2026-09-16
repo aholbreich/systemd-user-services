@@ -59,5 +59,5 @@ Feature: View recent journal logs for a unit from the panel
   Scenario: Right-clicking Logs opens the full history in a real terminal
     Given the "sshd" row shows an active service
     When I right-click "Logs" on the "sshd" row
-    Then a terminal opens running "journalctl --user -u sshd"
+    Then a terminal opens running "/usr/bin/journalctl --user -u sshd"
     And the inline log panel does not open

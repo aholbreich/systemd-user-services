@@ -46,9 +46,11 @@ Panel {
   // our own. execArgv (not execDetached) keeps the unit name out of any
   // shell's tokenizing, matching the shipped plugins' convention for
   // launching things built from row data rather than a fixed string.
+  // Both binaries by absolute path, same as Service.qml's processes; the
+  // terminal keeps the user's environment since it's an interactive session.
   function openLogsInTerminal(name) {
     if (!name) return
-    Util.execArgv(["omarchy-launch-terminal", "journalctl", "--user", "-u", name])
+    Util.execArgv(["/usr/share/omarchy/bin/omarchy-launch-terminal", Model.TRUSTED_BINARIES.journalctl, "--user", "-u", name])
   }
 
   component TabButton: Button {

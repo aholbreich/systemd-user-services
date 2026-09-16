@@ -39,6 +39,13 @@ Item {
   property string _logOutput: ""
   property string _logError: ""
 
+  // Read once from the shell's environment; Model.minimalEnvironment
+  // decides what actually reaches the child processes.
+  readonly property var sessionEnv: ({
+    XDG_RUNTIME_DIR: Quickshell.env("XDG_RUNTIME_DIR"),
+    DBUS_SESSION_BUS_ADDRESS: Quickshell.env("DBUS_SESSION_BUS_ADDRESS")
+  })
+
   function setting(name, fallback) {
     var value = settings ? settings[name] : undefined
     return value === undefined || value === null ? fallback : value
@@ -57,6 +64,7 @@ Item {
     _listOutput = ""
     _listError = ""
     refreshing = true
+    listProcess.command = Model.listUnitsCommand(sessionEnv)
     listProcess.running = true
     if (!pollWatchdog.running) pollWatchdog.start()
   }
@@ -96,7 +104,7 @@ Item {
     _logOutput = ""
     _logError = ""
     logLoading = true
-    logProcess.command = ["journalctl", "--user", "-u", name, "-n", "20", "--no-pager", "--output=short-iso"]
+    logProcess.command = Model.journalCommand(name, sessionEnv)
     logProcess.running = true
   }
 
@@ -107,7 +115,7 @@ Item {
     lastActionError = ""
     _actionOutput = ""
     _actionError = ""
-    actionProcess.command = ["systemctl", "--user", verb, name]
+    actionProcess.command = Model.actionCommand(verb, name, sessionEnv)
     actionProcess.running = true
   }
 
@@ -183,7 +191,7 @@ Item {
   Process {
     id: listProcess
     running: false
-    command: ["systemctl", "--user", "list-units", "--type=service", "--all", "--output=json"]
+    command: []
     stdout: StdioCollector {
       id: listStdout
       waitForEnd: true
