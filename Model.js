@@ -196,7 +196,8 @@ function minimalEnvironment(sessionEnv) {
 // If timeout itself is SIGKILLed (it can't forward that), the parent-death
 // signals set with setpriv take over: timeout gets TERM if the shell goes
 // away, and the command gets KILL if timeout goes away, so nothing outlives
-// the process that started it.
+// the process that started it. The same KILL-on-parent-death is set on the
+// output-limiting bash in between (see LIMIT_OUTPUT_SCRIPT).
 var TIMEOUT_SEC = { list: 10, action: 30, journal: 10 }
 var KILL_AFTER_SEC = 2
 
@@ -215,31 +216,70 @@ function processErrorText(exitCode, exitStatus, stderrText, fallback, timeoutSec
   return trimmed || fallback
 }
 
-function boundedCommand(argv, sessionEnv, timeoutSec) {
+// Byte ceilings per stream. The output is cut in the pipeline before it
+// reaches Quickshell, so a StdioCollector never has to buffer more than
+// this. Current list output is ~6 KB for ~50 units.
+var OUTPUT_LIMITS = {
+  list: { stdout: 1048576, stderr: 65536 },
+  action: { stdout: 65536, stderr: 65536 },
+  journal: { stdout: 262144, stderr: 65536 }
+}
+
+// Runs "$@" with stdout and stderr each passed through head -c. stdout goes
+// through one extra byte first so going over the limit can be detected:
+// the command then fails with "output exceeded N bytes" instead of handing
+// back silently truncated JSON. pipefail keeps the command's own exit
+// status, and `wait $!` makes sure the stderr reader has flushed before the
+// script exits. The no-op TERM trap keeps bash waiting for the pipeline
+// after timeout's TERM instead of exiting first; otherwise timeout would
+// see its child gone and skip the KILL for anything that ignored TERM.
+// Arguments are positional, never spliced into the script.
+var LIMIT_OUTPUT_SCRIPT = [
+  "out_max=$1 err_max=$2; shift 2",
+  "set -o pipefail",
+  "trap : TERM",
+  "exec 3>&2",
+  "{",
+  "  \"$@\" | /usr/bin/head -c \"$((out_max + 1))\" | {",
+  "    /usr/bin/head -c \"$out_max\"",
+  "    if LC_ALL=C IFS= read -r -n 1 _; then",
+  "      echo \"output exceeded $out_max bytes\" >&3",
+  "      exit 1",
+  "    fi",
+  "  }",
+  "} 2> >(/usr/bin/head -c \"$err_max\" >&2)",
+  "status=$?",
+  "wait $!",
+  "exit $status"
+].join("\n")
+
+function boundedCommand(argv, sessionEnv, timeoutSec, limits) {
   return ["/usr/bin/env", "-i"]
     .concat(minimalEnvironment(sessionEnv))
     .concat(["/usr/bin/setpriv", "--pdeathsig", "TERM"])
     .concat(["/usr/bin/timeout", "--kill-after=" + KILL_AFTER_SEC + "s", timeoutSec + "s"])
     .concat(["/usr/bin/setpriv", "--pdeathsig", "KILL"])
+    .concat(["/usr/bin/bash", "-c", LIMIT_OUTPUT_SCRIPT, "limit-output", String(limits.stdout), String(limits.stderr)])
+    .concat(["/usr/bin/setpriv", "--pdeathsig", "KILL"])
     .concat(argv)
 }
 
-function processCommand(tool, args, sessionEnv, timeoutSec) {
+function processCommand(tool, args, sessionEnv, kind) {
   var binary = TRUSTED_BINARIES[tool]
   if (!binary) throw new Error("Unknown tool: " + tool)
-  return boundedCommand([binary].concat(args), sessionEnv, timeoutSec)
+  return boundedCommand([binary].concat(args), sessionEnv, TIMEOUT_SEC[kind], OUTPUT_LIMITS[kind])
 }
 
 function listUnitsCommand(sessionEnv) {
-  return processCommand("systemctl", ["--user", "list-units", "--type=service", "--all", "--output=json"], sessionEnv, TIMEOUT_SEC.list)
+  return processCommand("systemctl", ["--user", "list-units", "--type=service", "--all", "--output=json"], sessionEnv, "list")
 }
 
 function actionCommand(verb, unitName, sessionEnv) {
-  return processCommand("systemctl", ["--user", verb, unitName], sessionEnv, TIMEOUT_SEC.action)
+  return processCommand("systemctl", ["--user", verb, unitName], sessionEnv, "action")
 }
 
 function journalCommand(unitName, sessionEnv) {
-  return processCommand("journalctl", ["--user", "-u", unitName, "-n", "20", "--no-pager", "--output=short-iso"], sessionEnv, TIMEOUT_SEC.journal)
+  return processCommand("journalctl", ["--user", "-u", unitName, "-n", "20", "--no-pager", "--output=short-iso"], sessionEnv, "journal")
 }
 
 if (typeof module !== "undefined") {
@@ -266,6 +306,7 @@ if (typeof module !== "undefined") {
     KILL_AFTER_SEC: KILL_AFTER_SEC,
     timedOut: timedOut,
     processErrorText: processErrorText,
+    OUTPUT_LIMITS: OUTPUT_LIMITS,
     boundedCommand: boundedCommand,
     processCommand: processCommand,
     listUnitsCommand: listUnitsCommand,

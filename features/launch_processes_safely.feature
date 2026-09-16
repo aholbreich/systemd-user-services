@@ -61,3 +61,40 @@ Feature: Launch systemctl and journalctl without trusting the shell's environmen
     And the error text for a crash exit 9 with stderr "" is "systemctl list-units failed (timed out after 10s)"
     And the error text for a normal exit 1 with stderr "Unit x not found.\n" is "Unit x not found."
     And the error text for a normal exit 1 with stderr "" is "systemctl list-units failed"
+
+  @automated
+  Scenario: Output is capped per stream before it reaches the shell
+    Then the list command limits stdout to 1048576 and stderr to 65536 bytes
+    And the output limiter runs inside the timeout and outside the real binary
+
+  @automated
+  Scenario: Output that fits the limit comes through unchanged
+    When a command limited to 10 bytes of stdout and 10 of stderr runs "printf 0123456789"
+    Then it exits with 0
+    And stdout is "0123456789"
+
+  @automated
+  Scenario: One byte over the stdout limit is an error, not silently truncated output
+    When a command limited to 10 bytes of stdout and 64 of stderr runs "printf 01234567890"
+    Then it exits with 1
+    And stdout is exactly 10 bytes
+    And stderr is "output exceeded 10 bytes"
+
+  @automated
+  Scenario: stderr is capped too
+    When a command limited to 64 bytes of stdout and 16 of stderr runs "yes error >&2"
+    Then stderr is at most 16 bytes
+    And it finished within 2 seconds
+
+  @automated
+  Scenario: A command that floods stdout is stopped instead of buffered
+    When a command limited to 64 bytes of stdout and 64 of stderr runs "yes"
+    Then it exits with 1
+    And stdout is exactly 64 bytes
+    And it finished within 2 seconds
+
+  @automated
+  Scenario: The command's own exit status and stderr still come through
+    When a command limited to 64 bytes of stdout and 64 of stderr runs "echo 'Unit x.service not found.' >&2; exit 5"
+    Then it exits with 5
+    And stderr is "Unit x.service not found."

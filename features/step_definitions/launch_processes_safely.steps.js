@@ -6,6 +6,8 @@ const os = require("node:os")
 const path = require("node:path")
 const Model = require("../../Model.js")
 
+const SMALL_LIMITS = { stdout: 64, stderr: 64 }
+
 function currentSessionEnv() {
   return {
     XDG_RUNTIME_DIR: process.env.XDG_RUNTIME_DIR,
@@ -99,7 +101,7 @@ function hangingScript(pidFile, ignoreTerm) {
 function givenHanging(world, seconds, ignoreTerm) {
   world.tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "oma-systemd-hang-"))
   world.pidFile = path.join(world.tmpDir, "pids")
-  world.argv = Model.boundedCommand(["/usr/bin/sh", "-c", hangingScript(world.pidFile, ignoreTerm)], currentSessionEnv(), seconds)
+  world.argv = Model.boundedCommand(["/usr/bin/sh", "-c", hangingScript(world.pidFile, ignoreTerm)], currentSessionEnv(), seconds, SMALL_LIMITS)
 }
 
 Given("a bounded {int}s command that starts a background child and then hangs", function(seconds) {
@@ -114,7 +116,7 @@ Given("a bounded {int}s command that hangs in place", function(seconds) {
   this.tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "oma-systemd-hang-"))
   this.pidFile = path.join(this.tmpDir, "pids")
   const script = "echo $$ > '" + this.pidFile + "'; exec /usr/bin/sleep 300"
-  this.argv = Model.boundedCommand(["/usr/bin/sh", "-c", script], currentSessionEnv(), seconds)
+  this.argv = Model.boundedCommand(["/usr/bin/sh", "-c", script], currentSessionEnv(), seconds, SMALL_LIMITS)
 })
 
 When("it runs to completion", function() {
@@ -180,6 +182,53 @@ Then("the error text for a {word} exit {int} with stderr {string} is {string}", 
   const exitStatus = kind === "crash" ? 1 : 0
   const text = Model.processErrorText(code, exitStatus, stderr.replace(/\\n/g, "\n"), "systemctl list-units failed", Model.TIMEOUT_SEC.list)
   assert.equal(text, expected)
+})
+
+Then("the list command limits stdout to {int} and stderr to {int} bytes", function(out, err) {
+  const argv = allCommands().list
+  const i = argv.indexOf("limit-output")
+  assert.ok(i > 0, "no output limiter in " + argv.join(" "))
+  assert.deepEqual(argv.slice(i + 1, i + 3), [String(out), String(err)])
+})
+
+Then("the output limiter runs inside the timeout and outside the real binary", function() {
+  for (const argv of Object.values(allCommands())) {
+    const timeoutAt = argv.indexOf("/usr/bin/timeout")
+    const bashAt = argv.indexOf("/usr/bin/bash")
+    const binaryAt = argv.lastIndexOf("KILL") + 1
+    assert.ok(timeoutAt < bashAt && bashAt < binaryAt, argv.join(" "))
+  }
+})
+
+When("a command limited to {int} bytes of stdout and {int} of stderr runs {string}", function(out, err, script) {
+  const argv = Model.boundedCommand(["/usr/bin/sh", "-c", script], currentSessionEnv(), 5, { stdout: out, stderr: err })
+  const started = Date.now()
+  this.run = spawnSync(argv[0], argv.slice(1), { encoding: "utf8", timeout: 20000 })
+  this.elapsedMs = Date.now() - started
+})
+
+Then("it exits with {int}", function(code) {
+  assert.equal(this.run.status, code, this.run.stderr)
+})
+
+Then("stdout is exactly {int} bytes", function(n) {
+  assert.equal(Buffer.byteLength(this.run.stdout), n)
+})
+
+Then("stdout is {string}", function(expected) {
+  assert.equal(this.run.stdout, expected)
+})
+
+Then("stderr is {string}", function(expected) {
+  assert.equal(this.run.stderr.trim(), expected)
+})
+
+Then("stderr is at most {int} bytes", function(n) {
+  assert.ok(Buffer.byteLength(this.run.stderr) <= n, Buffer.byteLength(this.run.stderr) + " bytes")
+})
+
+Then("it finished within {int} second(s)", function(seconds) {
+  assert.ok(this.elapsedMs < seconds * 1000, "took " + this.elapsedMs + "ms")
 })
 
 After(function() {
